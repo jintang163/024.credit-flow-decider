@@ -453,3 +453,38 @@ INSERT INTO `sys_user_role` (`id`, `user_id`, `role_id`) VALUES
 (2, 2, 2),
 (3, 3, 3),
 (4, 4, 4);
+
+-- =============================================
+-- 征信API调用日志表
+-- =============================================
+DROP TABLE IF EXISTS `credit_api_call_log`;
+CREATE TABLE `credit_api_call_log` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `query_id` VARCHAR(64) NOT NULL COMMENT '查询批次ID',
+    `request_id` VARCHAR(64) DEFAULT NULL COMMENT '请求ID',
+    `application_id` BIGINT DEFAULT NULL COMMENT '申请ID',
+    `application_no` VARCHAR(64) DEFAULT NULL COMMENT '申请编号',
+    `customer_id` VARCHAR(64) NOT NULL COMMENT '客户ID',
+    `data_source` VARCHAR(32) NOT NULL COMMENT '数据源类型:PBOC-央行,BAIHANG-百行,SOCIAL_SECURITY-社保,HOUSING_FUND-公积金',
+    `data_source_name` VARCHAR(64) NOT NULL COMMENT '数据源名称',
+    `query_mode` VARCHAR(16) NOT NULL COMMENT '查询模式:SYNC-同步,ASYNC-异步',
+    `request_body` TEXT COMMENT '请求报文(JSON)',
+    `response_body` TEXT COMMENT '响应报文(JSON)',
+    `cost_ms` BIGINT DEFAULT NULL COMMENT '调用耗时(毫秒)',
+    `retry_count` INT DEFAULT 0 COMMENT '重试次数',
+    `success` TINYINT NOT NULL DEFAULT 1 COMMENT '是否成功:0-否,1-是',
+    `error_code` VARCHAR(64) DEFAULT NULL COMMENT '错误码',
+    `error_msg` VARCHAR(512) DEFAULT NULL COMMENT '错误信息',
+    `quality_tag` VARCHAR(32) DEFAULT NULL COMMENT '数据质量标签:NORMAL-正常,FALLBACK-降级,PENDING_REVIEW-待复核,PARTIAL-部分失败',
+    `circuit_breaker_status` VARCHAR(32) DEFAULT NULL COMMENT '熔断器状态:CLOSED-关闭,OPEN-打开,HALF_OPEN-半开',
+    `call_time` DATETIME NOT NULL COMMENT '调用时间',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记:0-未删除,1-已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_query_id` (`query_id`),
+    KEY `idx_application_id` (`application_id`),
+    KEY `idx_customer_id` (`customer_id`),
+    KEY `idx_data_source` (`data_source`),
+    KEY `idx_call_time` (`call_time`),
+    KEY `idx_success` (`success`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='征信API调用日志表';

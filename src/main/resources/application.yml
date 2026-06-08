@@ -96,6 +96,31 @@ credit:
       min-score: 450
       max-score: 850
       delay-ms: 500
+  integration:
+    timeout-ms: 5000
+    mock-enabled: true
+    use-new-service: true
+    retry:
+      max-attempts: 3
+      wait-duration-ms: 500
+    circuit-breaker:
+      failure-threshold: 50
+      wait-duration-ms: 30000
+      sliding-window-size: 10
+    async:
+      callback-timeout-ms: 10000
+    pboc:
+      api-url: http://localhost:8081
+      api-key: pboc-secret-key-2024
+    baihang:
+      api-url: http://localhost:8082
+      api-key: baihang-secret-key-2024
+    social-security:
+      api-url: http://localhost:8083
+      api-key: social-security-key-2024
+    housing-fund:
+      api-url: http://localhost:8084
+      api-key: housing-fund-key-2024
   anti-fraud:
     rule-engine: QL_EXPRESS
     cache-rules: true
@@ -127,3 +152,45 @@ credit:
     min-term: 3
     max-term: 360
     max-dti: 0.75
+
+rocketmq:
+  name-server: localhost:9876
+  producer:
+    group: credit-producer-group
+    send-message-timeout: 3000
+    retry-times-when-send-failed: 2
+  consumer:
+    group: credit-consumer-group
+  topic:
+    credit-callback: credit-async-callback
+  tag:
+    credit-callback: credit
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        register-health-indicator: true
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        wait-duration-in-open-state: 30s
+        failure-rate-threshold: 50
+        event-consumer-buffer-size: 10
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 500ms
+        retry-exceptions:
+          - java.lang.RuntimeException
+          - java.lang.Exception
+        ignore-exceptions:
+          - java.lang.IllegalArgumentException
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 5s
+        cancel-running-future: true
