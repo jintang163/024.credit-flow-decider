@@ -2,11 +2,15 @@ package com.bc.credit.service.impl;
 
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import com.bc.credit.common.ProcessVariableConstants;
 import com.bc.credit.dto.LoanApplicationDTO;
 import com.bc.credit.entity.LoanApplication;
 import com.bc.credit.service.ProcessContextService;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.flowable.engine.RuntimeService;
+import org.flowable.engine.delegate.DelegateExecution;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
@@ -20,6 +24,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 @Service
 public class ProcessContextServiceImpl implements ProcessContextService {
+
+    @Autowired
+    private RuntimeService runtimeService;
 
     @Value("${credit.application.no-prefix:LN}")
     private String applicationNoPrefix;
@@ -36,98 +43,103 @@ public class ProcessContextServiceImpl implements ProcessContextService {
     public Map<String, Object> buildProcessContext(LoanApplication application, LoanApplicationDTO applicationDTO) {
         Map<String, Object> context = new HashMap<>();
 
-        context.put("applicationId", application.getId());
-        context.put("applicationNo", application.getApplicationNo());
-        context.put("processInstanceId", application.getProcessInstanceId());
-        context.put("submitTime", application.getSubmitTime());
+        context.put(ProcessVariableConstants.APPLICATION_ID, application.getId());
+        context.put(ProcessVariableConstants.APPLICATION_NO, application.getApplicationNo());
+        context.put(ProcessVariableConstants.PROCESS_INSTANCE_ID, application.getProcessInstanceId());
+        context.put(ProcessVariableConstants.SUBMIT_TIME, application.getSubmitTime());
 
-        context.put("customerId", application.getCustomerId());
-        context.put("customerName", application.getCustomerName());
-        context.put("idCard", application.getIdCard());
-        context.put("phone", application.getPhone());
-        context.put("email", application.getEmail());
-        context.put("age", application.getAge());
-        context.put("educationLevel", application.getEducationLevel());
-        context.put("workYears", application.getWorkYears());
-        context.put("maritalStatus", application.getMaritalStatus());
-        context.put("hasHouse", application.getHasHouse() != null ? application.getHasHouse() : false);
-        context.put("hasCar", application.getHasCar() != null ? application.getHasCar() : false);
+        context.put(ProcessVariableConstants.CUSTOMER_ID, application.getCustomerId());
+        context.put(ProcessVariableConstants.CUSTOMER_NAME, application.getCustomerName());
+        context.put(ProcessVariableConstants.ID_CARD, application.getIdCard());
+        context.put(ProcessVariableConstants.PHONE, application.getPhone());
+        context.put(ProcessVariableConstants.EMAIL, application.getEmail());
+        context.put(ProcessVariableConstants.AGE, application.getAge());
+        context.put(ProcessVariableConstants.EDUCATION_LEVEL, application.getEducationLevel());
+        context.put(ProcessVariableConstants.WORK_YEARS, application.getWorkYears());
+        context.put(ProcessVariableConstants.MARITAL_STATUS, application.getMaritalStatus());
+        context.put(ProcessVariableConstants.HAS_HOUSE, application.getHasHouse() != null ? application.getHasHouse() : false);
+        context.put(ProcessVariableConstants.HAS_CAR, application.getHasCar() != null ? application.getHasCar() : false);
 
-        context.put("loanAmount", application.getLoanAmount() != null
+        context.put(ProcessVariableConstants.LOAN_AMOUNT, application.getLoanAmount() != null
                 ? application.getLoanAmount().doubleValue() : 0);
-        context.put("loanTerm", application.getLoanTerm());
-        context.put("loanPurpose", application.getLoanPurpose());
+        context.put(ProcessVariableConstants.LOAN_TERM, application.getLoanTerm());
+        context.put(ProcessVariableConstants.LOAN_PURPOSE, application.getLoanPurpose());
 
-        context.put("monthlyIncome", application.getMonthlyIncome() != null
+        context.put(ProcessVariableConstants.MONTHLY_INCOME, application.getMonthlyIncome() != null
                 ? application.getMonthlyIncome().doubleValue() : 0);
-        context.put("monthlyDebt", application.getMonthlyDebt() != null
+        context.put(ProcessVariableConstants.MONTHLY_DEBT, application.getMonthlyDebt() != null
                 ? application.getMonthlyDebt().doubleValue() : 0);
 
         if (application.getMonthlyIncome() != null && application.getMonthlyIncome().compareTo(BigDecimal.ZERO) > 0
                 && application.getMonthlyDebt() != null) {
             double dti = application.getMonthlyDebt().doubleValue() / application.getMonthlyIncome().doubleValue();
-            context.put("dti", dti);
-            context.put("debtRatio", dti);
+            context.put(ProcessVariableConstants.DTI, dti);
+            context.put(ProcessVariableConstants.DEBT_RATIO, dti);
         } else {
-            context.put("dti", 0.0);
-            context.put("debtRatio", 0.0);
+            context.put(ProcessVariableConstants.DTI, 0.0);
+            context.put(ProcessVariableConstants.DEBT_RATIO, 0.0);
         }
 
-        context.put("contactName", application.getContactName());
-        context.put("contactPhone", application.getContactPhone());
-        context.put("contactRelation", application.getContactRelation());
+        context.put(ProcessVariableConstants.CONTACT_NAME, application.getContactName());
+        context.put(ProcessVariableConstants.CONTACT_PHONE, application.getContactPhone());
+        context.put(ProcessVariableConstants.CONTACT_RELATION, application.getContactRelation());
 
-        context.put("ipAddress", applicationDTO.getIpAddress());
-        context.put("deviceInfo", applicationDTO.getDeviceInfo());
-        context.put("deviceId", application.getDeviceId());
-        context.put("macAddress", application.getMacAddress());
-        context.put("userAgent", application.getUserAgent());
-        context.put("channel", application.getChannel());
+        context.put(ProcessVariableConstants.IP_ADDRESS, applicationDTO.getIpAddress());
+        context.put(ProcessVariableConstants.DEVICE_INFO, applicationDTO.getDeviceInfo());
+        context.put(ProcessVariableConstants.DEVICE_ID, application.getDeviceId());
+        context.put(ProcessVariableConstants.MAC_ADDRESS, application.getMacAddress());
+        context.put(ProcessVariableConstants.USER_AGENT, application.getUserAgent());
+        context.put(ProcessVariableConstants.CHANNEL, application.getChannel());
 
-        context.put("residentialAddress", application.getResidentialAddress());
-        context.put("employer", application.getEmployer());
-        context.put("position", application.getPosition());
+        context.put(ProcessVariableConstants.RESIDENTIAL_ADDRESS, application.getResidentialAddress());
+        context.put(ProcessVariableConstants.EMPLOYER, application.getEmployer());
+        context.put(ProcessVariableConstants.POSITION, application.getPosition());
 
-        context.put("applyUser", applicationDTO.getSubmitBy() != null
+        context.put(ProcessVariableConstants.APPLY_USER, applicationDTO.getSubmitBy() != null
                 ? applicationDTO.getSubmitBy() : application.getCustomerId());
 
-        context.put("applicationStatus", application.getApplicationStatus());
-        context.put("returnCount", application.getReturnCount() != null ? application.getReturnCount() : 0);
+        context.put(ProcessVariableConstants.APPLICATION_STATUS, application.getApplicationStatus());
+        context.put(ProcessVariableConstants.RETURN_COUNT, application.getReturnCount() != null ? application.getReturnCount() : 0);
 
-        context.put("creditScore", 0);
-        context.put("creditLevel", "");
-        context.put("overdueCount", 0);
-        context.put("overdueAmount", 0.0);
-        context.put("totalLoanAmount", 0.0);
-        context.put("creditCardCount", 0);
-        context.put("creditCardLimit", 0.0);
+        context.put(ProcessVariableConstants.CREDIT_SCORE, 0);
+        context.put(ProcessVariableConstants.CREDIT_LEVEL, "");
+        context.put(ProcessVariableConstants.OVERDUE_COUNT, 0);
+        context.put(ProcessVariableConstants.OVERDUE_AMOUNT, 0.0);
+        context.put(ProcessVariableConstants.TOTAL_LOAN_AMOUNT, 0.0);
+        context.put(ProcessVariableConstants.CREDIT_CARD_COUNT, 0);
+        context.put(ProcessVariableConstants.CREDIT_CARD_LIMIT, 0.0);
+        context.put(ProcessVariableConstants.CREDIT_QUERY_SUCCESS, false);
 
-        context.put("fraudScore", 0);
-        context.put("fraudRiskLevel", "LOW");
-        context.put("hitRules", "[]");
-        context.put("fraudCheckResult", "PASS");
+        context.put(ProcessVariableConstants.FRAUD_SCORE, 0);
+        context.put(ProcessVariableConstants.FRAUD_RISK_LEVEL, ProcessVariableConstants.RISK_LOW);
+        context.put(ProcessVariableConstants.HIT_RULES, "[]");
+        context.put(ProcessVariableConstants.FRAUD_CHECK_RESULT, ProcessVariableConstants.RESULT_PASS);
+        context.put(ProcessVariableConstants.FRAUD_RULE_COUNT, 0);
+        context.put(ProcessVariableConstants.FRAUD_CHECK_SUCCESS, false);
 
-        context.put("creditScoringResult", 0);
-        context.put("riskLevel", "LOW");
+        context.put(ProcessVariableConstants.CREDIT_SCORING_RESULT, 0);
+        context.put(ProcessVariableConstants.RISK_LEVEL, ProcessVariableConstants.RISK_LOW);
+        context.put(ProcessVariableConstants.SCORING_SUCCESS, false);
 
-        context.put("approvedAmount", 0.0);
-        context.put("approvedTerm", 0);
-        context.put("interestRate", 0.0);
-        context.put("limitAmount", 0.0);
+        context.put(ProcessVariableConstants.APPROVED_AMOUNT, 0.0);
+        context.put(ProcessVariableConstants.APPROVED_TERM, 0);
+        context.put(ProcessVariableConstants.INTEREST_RATE, 0.0);
+        context.put(ProcessVariableConstants.LIMIT_AMOUNT, 0.0);
+        context.put(ProcessVariableConstants.LIMIT_CALC_SUCCESS, false);
 
-        context.put("manualReviewResult", "");
-        context.put("manualReviewOpinion", "");
-        context.put("manualReviewer", "");
+        context.put(ProcessVariableConstants.MANUAL_REVIEW_RESULT, "");
+        context.put(ProcessVariableConstants.MANUAL_REVIEW_OPINION, "");
+        context.put(ProcessVariableConstants.MANUAL_REVIEWER, "");
 
-        context.put("finalApprovalResult", "");
-        context.put("finalApprovalOpinion", "");
-        context.put("finalApprover", "");
+        context.put(ProcessVariableConstants.FINAL_APPROVAL_RESULT, "");
+        context.put(ProcessVariableConstants.FINAL_APPROVAL_OPINION, "");
+        context.put(ProcessVariableConstants.FINAL_APPROVER, "");
 
-        context.put("contextVersion", "1.0");
-        context.put("contextBuildTime", LocalDateTime.now().toString());
+        context.put(ProcessVariableConstants.CONTEXT_VERSION, "1.0");
+        context.put(ProcessVariableConstants.CONTEXT_BUILD_TIME, LocalDateTime.now().toString());
 
-        log.debug("流程上下文构建完成, applicationNo: {}, contextKeys: {}",
-                application.getApplicationNo(), context.keySet());
+        log.debug("流程上下文构建完成, applicationNo: {}, contextSize: {}",
+                application.getApplicationNo(), context.size());
 
         return context;
     }
@@ -158,22 +170,13 @@ public class ProcessContextServiceImpl implements ProcessContextService {
 
     @Override
     public String generateIdempotentKey(LoanApplicationDTO applicationDTO) {
-        StringBuilder sb = new StringBuilder();
-
-        if (applicationDTO.getRequestId() != null && !applicationDTO.getRequestId().isEmpty()) {
-            sb.append("req:").append(applicationDTO.getRequestId());
-        } else {
-            sb.append("cust:").append(applicationDTO.getCustomerId());
-            sb.append(":idcard:").append(applicationDTO.getIdCard());
-            sb.append(":phone:").append(applicationDTO.getPhone());
-            sb.append(":amount:").append(applicationDTO.getLoanAmount());
-            sb.append(":term:").append(applicationDTO.getLoanTerm());
-            sb.append(":time:").append(LocalDateTime.now().format(TIME_FORMATTER));
+        if (applicationDTO.getRequestId() == null || applicationDTO.getRequestId().trim().isEmpty()) {
+            throw new IllegalArgumentException("请求ID不能为空");
         }
 
-        String idempotentKey = DigestUtils.md5Hex(sb.toString());
-        log.debug("生成幂等键: {}, original: {}", idempotentKey, sb);
-        return "idempotent:loan:apply:" + idempotentKey;
+        String idempotentKey = "idempotent:loan:apply:" + applicationDTO.getRequestId().trim();
+        log.debug("生成幂等键: {}, requestId: {}", idempotentKey, applicationDTO.getRequestId());
+        return idempotentKey;
     }
 
     @Override
@@ -200,8 +203,12 @@ public class ProcessContextServiceImpl implements ProcessContextService {
         }
 
         String[] requiredKeys = {
-                "applicationId", "applicationNo", "customerId",
-                "loanAmount", "loanTerm", "submitTime"
+                ProcessVariableConstants.APPLICATION_ID,
+                ProcessVariableConstants.APPLICATION_NO,
+                ProcessVariableConstants.CUSTOMER_ID,
+                ProcessVariableConstants.LOAN_AMOUNT,
+                ProcessVariableConstants.LOAN_TERM,
+                ProcessVariableConstants.SUBMIT_TIME
         };
 
         for (String key : requiredKeys) {
@@ -216,17 +223,77 @@ public class ProcessContextServiceImpl implements ProcessContextService {
         log.debug("流程上下文校验通过");
     }
 
+    @Override
+    public void updateProcessVariables(DelegateExecution execution, String key, Object value) {
+        if (execution != null && key != null && !key.isEmpty()) {
+            execution.setVariable(key, value);
+            log.debug("更新流程变量(DelegateExecution), key: {}, value: {}, executionId: {}",
+                    key, value, execution.getId());
+        }
+    }
+
+    @Override
+    public void updateProcessVariables(DelegateExecution execution, Map<String, Object> variables) {
+        if (execution != null && variables != null && !variables.isEmpty()) {
+            execution.setVariables(variables);
+            log.debug("批量更新流程变量(DelegateExecution), variablesSize: {}, executionId: {}",
+                    variables.size(), execution.getId());
+        }
+    }
+
+    @Override
+    public Map<String, Object> mergeWithFlowableVariables(Map<String, Object> localContext, String processInstanceId) {
+        if (processInstanceId == null || processInstanceId.isEmpty()) {
+            return localContext != null ? localContext : new HashMap<>();
+        }
+
+        Map<String, Object> mergedContext = new HashMap<>();
+        if (localContext != null) {
+            mergedContext.putAll(localContext);
+        }
+
+        try {
+            Map<String, Object> flowableVariables = runtimeService.getVariables(processInstanceId);
+            if (flowableVariables != null && !flowableVariables.isEmpty()) {
+                mergedContext.putAll(flowableVariables);
+                log.debug("合并Flowable流程变量, processInstanceId: {}, flowableVarSize: {}, mergedSize: {}",
+                        processInstanceId, flowableVariables.size(), mergedContext.size());
+            }
+        } catch (Exception e) {
+            log.warn("从Flowable获取流程变量失败, processInstanceId: {}", processInstanceId, e);
+        }
+
+        return mergedContext;
+    }
+
+    @Override
+    public void syncContextToFlowable(String processInstanceId, Map<String, Object> context) {
+        if (processInstanceId == null || processInstanceId.isEmpty()
+                || context == null || context.isEmpty()) {
+            return;
+        }
+
+        try {
+            runtimeService.setVariables(processInstanceId, context);
+            log.debug("同步上下文到Flowable成功, processInstanceId: {}, varSize: {}",
+                    processInstanceId, context.size());
+        } catch (Exception e) {
+            log.error("同步上下文到Flowable失败, processInstanceId: {}", processInstanceId, e);
+            throw new RuntimeException("同步流程上下文失败: " + e.getMessage(), e);
+        }
+    }
+
     public String getContextSnapshot(Map<String, Object> context) {
         if (context == null) {
             return "{}";
         }
         Map<String, Object> snapshot = new HashMap<>();
-        snapshot.put("applicationNo", context.get("applicationNo"));
-        snapshot.put("applicationStatus", context.get("applicationStatus"));
-        snapshot.put("creditScore", context.get("creditScore"));
-        snapshot.put("fraudScore", context.get("fraudScore"));
-        snapshot.put("riskLevel", context.get("riskLevel"));
-        snapshot.put("approvedAmount", context.get("approvedAmount"));
+        snapshot.put(ProcessVariableConstants.APPLICATION_NO, context.get(ProcessVariableConstants.APPLICATION_NO));
+        snapshot.put(ProcessVariableConstants.APPLICATION_STATUS, context.get(ProcessVariableConstants.APPLICATION_STATUS));
+        snapshot.put(ProcessVariableConstants.CREDIT_SCORE, context.get(ProcessVariableConstants.CREDIT_SCORE));
+        snapshot.put(ProcessVariableConstants.FRAUD_SCORE, context.get(ProcessVariableConstants.FRAUD_SCORE));
+        snapshot.put(ProcessVariableConstants.RISK_LEVEL, context.get(ProcessVariableConstants.RISK_LEVEL));
+        snapshot.put(ProcessVariableConstants.APPROVED_AMOUNT, context.get(ProcessVariableConstants.APPROVED_AMOUNT));
         return JSON.toJSONString(snapshot);
     }
 }

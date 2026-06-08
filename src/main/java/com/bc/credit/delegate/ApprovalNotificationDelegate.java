@@ -1,6 +1,7 @@
 package com.bc.credit.delegate;
 
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import com.bc.credit.common.ProcessVariableConstants;
 import com.bc.credit.common.enums.ApplicationStatusEnum;
 import com.bc.credit.entity.ApprovalRecord;
 import com.bc.credit.entity.LoanApplication;
@@ -27,8 +28,8 @@ public class ApprovalNotificationDelegate implements JavaDelegate {
     @Override
     public void execute(DelegateExecution execution) {
         String processInstanceId = execution.getProcessInstanceId();
-        Long applicationId = (Long) execution.getVariable("applicationId");
-        String applicationNo = (String) execution.getVariable("applicationNo");
+        Long applicationId = (Long) execution.getVariable(ProcessVariableConstants.APPLICATION_ID);
+        String applicationNo = (String) execution.getVariable(ProcessVariableConstants.APPLICATION_NO);
 
         log.info("执行审批通过通知服务任务, processInstanceId: {}, applicationId: {}",
                 processInstanceId, applicationId);
@@ -39,9 +40,9 @@ public class ApprovalNotificationDelegate implements JavaDelegate {
                 throw new RuntimeException("贷款申请不存在: " + applicationId);
             }
 
-            BigDecimal creditLimit = (BigDecimal) execution.getVariable("creditLimit");
+            BigDecimal creditLimit = (BigDecimal) execution.getVariable(ProcessVariableConstants.CREDIT_LIMIT);
             Integer approvedTerm = application.getLoanTerm();
-            BigDecimal interestRate = (BigDecimal) execution.getVariable("interestRate");
+            BigDecimal interestRate = (BigDecimal) execution.getVariable(ProcessVariableConstants.INTEREST_RATE);
 
             application.setApplicationStatus(ApplicationStatusEnum.APPROVED.getCode());
             application.setApprovedAmount(creditLimit);

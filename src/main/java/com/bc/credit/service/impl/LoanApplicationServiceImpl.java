@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.bc.credit.common.ProcessVariableConstants;
 import com.bc.credit.common.enums.ApplicationStatusEnum;
 import com.bc.credit.common.exception.BusinessException;
 import com.bc.credit.dto.LoanApplicationDTO;
@@ -112,14 +113,14 @@ public class LoanApplicationServiceImpl implements LoanApplicationService {
 
             loanApplicationMapper.insert(application);
 
-            Map<String, Object> workflowResult = workflowService.startProcess(
-                    null, application, applicationDTO);
+            Map<String, Object> processContext = buildProcessContext(application, applicationDTO);
+
+            Map<String, Object> workflowResult = workflowService.startProcessWithContext(
+                    null, application, applicationDTO, processContext);
 
             String processInstanceId = (String) workflowResult.get("processInstanceId");
             application.setProcessInstanceId(processInstanceId);
             loanApplicationMapper.updateById(application);
-
-            Map<String, Object> processContext = buildProcessContext(application, applicationDTO);
 
             saveApprovalRecord(application.getId(), processInstanceId, null,
                     "start_application", "提交申请", "申请提交",
@@ -349,26 +350,31 @@ public class LoanApplicationServiceImpl implements LoanApplicationService {
             throw new BusinessException("申请不存在: " + applicationNo);
         }
 
-        Map<String, Object> context = new HashMap<>();
-        context.put("applicationId", application.getId());
-        context.put("applicationNo", application.getApplicationNo());
-        context.put("processInstanceId", application.getProcessInstanceId());
-        context.put("applicationStatus", application.getApplicationStatus());
-        context.put("applicationStatusDesc", ApplicationStatusEnum.getByCode(application.getApplicationStatus()));
-        context.put("customerId", application.getCustomerId());
-        context.put("customerName", application.getCustomerName());
-        context.put("loanAmount", application.getLoanAmount());
-        context.put("loanTerm", application.getLoanTerm());
-        context.put("approvedAmount", application.getApprovedAmount());
-        context.put("riskLevel", application.getRiskLevel());
-        context.put("creditScore", application.getCreditScore());
-        context.put("returnCount", application.getReturnCount());
-        context.put("returnReason", application.getReturnReason());
-        context.put("rejectReason", application.getRejectReason());
-        context.put("submitTime", application.getSubmitTime());
-        context.put("approveTime", application.getApproveTime());
+        Map<String, Object> localContext = new HashMap<>();
+        localContext.put(ProcessVariableConstants.APPLICATION_ID, application.getId());
+        localContext.put(ProcessVariableConstants.APPLICATION_NO, application.getApplicationNo());
+        localContext.put(ProcessVariableConstants.PROCESS_INSTANCE_ID, application.getProcessInstanceId());
+        localContext.put(ProcessVariableConstants.APPLICATION_STATUS, application.getApplicationStatus());
+        localContext.put(ProcessVariableConstants.APPLICATION_STATUS_DESC,
+                ApplicationStatusEnum.getByCode(application.getApplicationStatus()));
+        localContext.put(ProcessVariableConstants.CUSTOMER_ID, application.getCustomerId());
+        localContext.put(ProcessVariableConstants.CUSTOMER_NAME, application.getCustomerName());
+        localContext.put(ProcessVariableConstants.LOAN_AMOUNT, application.getLoanAmount());
+        localContext.put(ProcessVariableConstants.LOAN_TERM, application.getLoanTerm());
+        localContext.put(ProcessVariableConstants.APPROVED_AMOUNT, application.getApprovedAmount());
+        localContext.put(ProcessVariableConstants.RISK_LEVEL, application.getRiskLevel());
+        localContext.put(ProcessVariableConstants.CREDIT_SCORE, application.getCreditScore());
+        localContext.put(ProcessVariableConstants.RETURN_COUNT, application.getReturnCount());
+        localContext.put(ProcessVariableConstants.RETURN_REASON, application.getReturnReason());
+        localContext.put(ProcessVariableConstants.REJECT_REASON, application.getRejectReason());
+        localContext.put(ProcessVariableConstants.SUBMIT_TIME, application.getSubmitTime());
+        localContext.put(ProcessVariableConstants.APPROVE_TIME, application.getApproveTime());
 
-        return context;
+        String processInstanceId = application.getProcessInstanceId();
+        Map<String, Object> mergedContext = processContextService.mergeWithFlowableVariables(
+                localContext, processInstanceId);
+
+        return mergedContext;
     }
 
     @Override

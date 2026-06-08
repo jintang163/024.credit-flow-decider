@@ -16,6 +16,10 @@ public interface WorkflowService {
     Map<String, Object> startProcess(String processKey, LoanApplication application,
                                      LoanApplicationDTO applicationDTO);
 
+    Map<String, Object> startProcessWithContext(String processKey, LoanApplication application,
+                                                 LoanApplicationDTO applicationDTO,
+                                                 Map<String, Object> processContext);
+
     void suspendProcess(String processInstanceId);
 
     void activateProcess(String processInstanceId);

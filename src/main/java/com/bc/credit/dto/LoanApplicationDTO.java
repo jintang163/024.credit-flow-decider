@@ -13,7 +13,9 @@ public class LoanApplicationDTO implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    @ApiModelProperty(value = "幂等请求ID，用于防止重复提交", example = "req_abc123xyz")
+    @NotBlank(message = "请求ID不能为空，用于幂等控制")
+    @Size(max = 128, message = "请求ID长度不能超过128字符")
+    @ApiModelProperty(value = "幂等请求ID，用于防止重复提交（必填）", required = true, example = "req_abc123xyz")
     private String requestId;
 
     @NotBlank(message = "客户ID不能为空")

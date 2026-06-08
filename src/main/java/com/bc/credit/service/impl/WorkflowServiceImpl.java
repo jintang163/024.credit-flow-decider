@@ -149,6 +149,47 @@ public class WorkflowServiceImpl implements WorkflowService {
     }
 
     @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> startProcessWithContext(String processKey, LoanApplication application,
+                                                        LoanApplicationDTO applicationDTO,
+                                                        Map<String, Object> processContext) {
+        log.info("使用完整上下文启动流程实例, processKey: {}, applicationNo: {}, contextSize: {}",
+                processKey, application.getApplicationNo(),
+                processContext != null ? processContext.size() : 0);
+
+        String actualProcessKey = (processKey != null && !processKey.isEmpty()) ? processKey : defaultProcessKey;
+
+        Map<String, Object> variables = new HashMap<>();
+        if (processContext != null) {
+            variables.putAll(processContext);
+        }
+
+        ProcessInstance processInstance = runtimeService.startProcessInstanceByKey(
+                actualProcessKey, application.getApplicationNo(), variables);
+
+        String processInstanceId = processInstance.getId();
+
+        if (processContext != null && !processContext.isEmpty()) {
+            processContext.put("processInstanceId", processInstanceId);
+            runtimeService.setVariables(processInstanceId, processContext);
+            log.debug("上下文已同步到Flowable, processInstanceId: {}, varSize: {}",
+                    processInstanceId, processContext.size());
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("processInstanceId", processInstanceId);
+        result.put("processDefinitionId", processInstance.getProcessDefinitionId());
+        result.put("businessKey", processInstance.getBusinessKey());
+        result.put("activityId", processInstance.getActivityId());
+        result.put("processContext", processContext);
+
+        log.info("流程实例启动成功(带上下文), processInstanceId: {}, applicationNo: {}",
+                processInstanceId, application.getApplicationNo());
+
+        return result;
+    }
+
+    @Override
     public void suspendProcess(String processInstanceId) {
         log.info("挂起流程实例: {}", processInstanceId);
         runtimeService.suspendProcessInstanceById(processInstanceId);
