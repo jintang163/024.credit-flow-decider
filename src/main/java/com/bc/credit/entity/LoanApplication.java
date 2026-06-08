@@ -30,6 +30,8 @@ public class LoanApplication implements Serializable {
 
     private String phone;
 
+    private String email;
+
     private BigDecimal loanAmount;
 
     private Integer loanTerm;
@@ -37,6 +39,42 @@ public class LoanApplication implements Serializable {
     private String loanPurpose;
 
     private Integer applicationStatus;
+
+    private BigDecimal monthlyIncome;
+
+    private BigDecimal monthlyDebt;
+
+    private Integer age;
+
+    private Integer educationLevel;
+
+    private Integer workYears;
+
+    private Boolean hasHouse;
+
+    private Boolean hasCar;
+
+    private String maritalStatus;
+
+    private String residentialAddress;
+
+    private String employer;
+
+    private String position;
+
+    private String contactName;
+
+    private String contactPhone;
+
+    private String contactRelation;
+
+    private String channel;
+
+    private String deviceId;
+
+    private String macAddress;
+
+    private String userAgent;
 
     private BigDecimal approvedAmount;
 

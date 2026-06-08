@@ -27,6 +27,19 @@ spring:
       test-on-return: false
       pool-prepared-statements: true
       max-pool-prepared-statement-per-connection-size: 20
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      database: 0
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-wait: -1ms
+          max-idle: 8
+          min-idle: 0
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
@@ -102,3 +115,15 @@ credit:
     jwt-expire-minutes: 720
     default-admin-user: admin
     default-admin-password: admin123
+  application:
+    no-prefix: LN
+    worker-id: 0
+    idempotent-enabled: true
+    idempotent-expire-seconds: 300
+    min-age: 18
+    max-age: 70
+    min-amount: 1000
+    max-amount: 500000
+    min-term: 3
+    max-term: 360
+    max-dti: 0.75

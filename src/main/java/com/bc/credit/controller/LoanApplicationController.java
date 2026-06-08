@@ -25,15 +25,47 @@ public class LoanApplicationController {
     @PostMapping("/submit")
     @ApiOperation("提交贷款申请")
     public Result<Map<String, Object>> submitApplication(
-            @Validated @RequestBody LoanApplicationDTO applicationDTO) {
-        log.info("收到贷款申请提交请求, customerId: {}, loanAmount: {}",
-                applicationDTO.getCustomerId(), applicationDTO.getLoanAmount());
+            @Validated @RequestBody LoanApplicationDTO applicationDTO,
+            javax.servlet.http.HttpServletRequest request) {
+        String ipAddress = getClientIp(request);
+        String userAgent = request.getHeader("User-Agent");
+
+        log.info("收到贷款申请提交请求, customerId: {}, loanAmount: {}, ip: {}",
+                applicationDTO.getCustomerId(), applicationDTO.getLoanAmount(), ipAddress);
         try {
-            Map<String, Object> result = loanApplicationService.submitApplication(applicationDTO);
+            Map<String, Object> result = loanApplicationService.submitApplicationWithIp(
+                    applicationDTO, ipAddress, userAgent);
             return Result.success("申请提交成功", result);
         } catch (Exception e) {
             log.error("贷款申请提交失败", e);
             return Result.error("申请提交失败: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/validate")
+    @ApiOperation("校验申请数据")
+    public Result<Void> validateApplication(
+            @Validated @RequestBody LoanApplicationDTO applicationDTO) {
+        log.info("校验申请数据, customerId: {}", applicationDTO.getCustomerId());
+        try {
+            loanApplicationService.validateApplication(applicationDTO);
+            return Result.success("数据校验通过", null);
+        } catch (Exception e) {
+            log.error("申请数据校验失败", e);
+            return Result.error("数据校验失败: " + e.getMessage());
+        }
+    }
+
+    @GetMapping("/{applicationNo}/context")
+    @ApiOperation("获取申请上下文")
+    public Result<Map<String, Object>> getApplicationContext(
+            @ApiParam("申请编号") @PathVariable String applicationNo) {
+        try {
+            Map<String, Object> context = loanApplicationService.getApplicationContext(applicationNo);
+            return Result.success(context);
+        } catch (Exception e) {
+            log.error("获取申请上下文失败", e);
+            return Result.error("获取失败: " + e.getMessage());
         }
     }
 
@@ -82,5 +114,33 @@ public class LoanApplicationController {
             log.error("查询申请列表失败", e);
             return Result.error("查询失败: " + e.getMessage());
         }
+    }
+
+    private String getClientIp(javax.servlet.http.HttpServletRequest request) {
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("Proxy-Client-IP");
+        }
+        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("WL-Proxy-Client-IP");
+        }
+        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("HTTP_CLIENT_IP");
+        }
+        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("HTTP_X_FORWARDED_FOR");
+        }
+        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getHeader("X-Real-IP");
+        }
+        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+
+        if (ip != null && ip.contains(",")) {
+            ip = ip.split(",")[0].trim();
+        }
+
+        return ip;
     }
 }
