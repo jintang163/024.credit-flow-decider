@@ -1,0 +1,87 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /credit-flow
+
+spring:
+  application:
+    name: credit-flow-decider
+  profiles:
+    active: dev
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/credit_flow?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&nullCatalogMeansCurrent=true
+    username: root
+    password: root
+    druid:
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+      max-wait: 60000
+      time-between-eviction-runs-millis: 60000
+      min-evictable-idle-time-millis: 300000
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      pool-prepared-statements: true
+      max-pool-prepared-statement-per-connection-size: 20
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.bc.credit.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    cache-enabled: false
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      id-type: assign_id
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+flowable:
+  async-executor-activate: true
+  database-schema-update: true
+  history-level: full
+  idm-engine-enabled: false
+  form-enabled: false
+  content-enabled: false
+  dmn-enabled: false
+  cmmn-enabled: false
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+    enable-swagger-models: true
+    enable-document-manage: true
+
+logging:
+  level:
+    root: info
+    com.bc.credit: debug
+    org.flowable: info
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+
+credit:
+  workflow:
+    default-process-key: credit_approval_process
+    auto-deploy: true
+  credit:
+    api-url: http://mock-credit-server/api/query
+    timeout: 5000
+  anti-fraud:
+    rule-path: classpath:rules/
+  scoring:
+    min-score: 300
+    max-score: 900
+    pass-score: 600
+  limit:
+    min-amount: 1000
+    max-amount: 500000
+    manual-review-threshold: 200000
+    high-risk-threshold: 500

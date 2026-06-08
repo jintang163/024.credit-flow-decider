@@ -1,0 +1,373 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             typeLanguage="http://www.w3.org/2001/XMLSchema"
+             expressionLanguage="http://www.w3.org/1999/XPath"
+             targetNamespace="http://www.bc.com/credit/process"
+             id="Definitions_1">
+
+    <process id="credit_approval_process" name="贷款审批流程" isExecutable="true" flowable:versionTag="1.0.0">
+
+        <startEvent id="start_application" name="提交申请">
+            <outgoing>Flow_to_credit_query</outgoing>
+        </startEvent>
+
+        <serviceTask id="credit_query_task" name="征信查询"
+                     flowable:delegateExpression="${creditQueryDelegate}">
+            <incoming>Flow_to_credit_query</incoming>
+            <outgoing>Flow_to_anti_fraud</outgoing>
+        </serviceTask>
+
+        <sequenceFlow id="Flow_to_credit_query" sourceRef="start_application" targetRef="credit_query_task"/>
+
+        <serviceTask id="anti_fraud_task" name="反欺诈校验"
+                     flowable:delegateExpression="${antiFraudDelegate}">
+            <incoming>Flow_to_anti_fraud</incoming>
+            <outgoing>Flow_to_fraud_gateway</outgoing>
+        </serviceTask>
+
+        <sequenceFlow id="Flow_to_anti_fraud" sourceRef="credit_query_task" targetRef="anti_fraud_task"/>
+
+        <exclusiveGateway id="fraud_result_gateway" name="反欺诈结果判断">
+            <incoming>Flow_to_fraud_gateway</incoming>
+            <outgoing>Flow_fraud_reject</outgoing>
+            <outgoing>Flow_to_scoring</outgoing>
+        </exclusiveGateway>
+
+        <sequenceFlow id="Flow_to_fraud_gateway" sourceRef="anti_fraud_task" targetRef="fraud_result_gateway"/>
+
+        <sequenceFlow id="Flow_fraud_reject" name="欺诈拒绝"
+                      sourceRef="fraud_result_gateway" targetRef="end_rejected">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${fraudResult == 2}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="Flow_to_scoring" name="继续审批"
+                      sourceRef="fraud_result_gateway" targetRef="credit_scoring_task">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${fraudResult != 2}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <serviceTask id="credit_scoring_task" name="信用评分"
+                     flowable:delegateExpression="${creditScoringDelegate}">
+            <incoming>Flow_to_scoring</incoming>
+            <outgoing>Flow_to_score_gateway</outgoing>
+        </serviceTask>
+
+        <exclusiveGateway id="score_gateway" name="评分结果判断">
+            <incoming>Flow_to_score_gateway</incoming>
+            <outgoing>Flow_score_reject</outgoing>
+            <outgoing>Flow_to_limit_calc</outgoing>
+        </exclusiveGateway>
+
+        <sequenceFlow id="Flow_to_score_gateway" sourceRef="credit_scoring_task" targetRef="score_gateway"/>
+
+        <sequenceFlow id="Flow_score_reject" name="评分不足拒绝"
+                      sourceRef="score_gateway" targetRef="end_rejected">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${creditScore < 600}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="Flow_to_limit_calc" name="评分通过"
+                      sourceRef="score_gateway" targetRef="limit_calc_task">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${creditScore >= 600}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <serviceTask id="limit_calc_task" name="额度计算"
+                     flowable:delegateExpression="${limitCalculationDelegate}">
+            <incoming>Flow_to_limit_calc</incoming>
+            <outgoing>Flow_to_review_gateway</outgoing>
+        </serviceTask>
+
+        <exclusiveGateway id="review_gateway" name="复核判断">
+            <incoming>Flow_to_review_gateway</incoming>
+            <outgoing>Flow_manual_review</outgoing>
+            <outgoing>Flow_to_final_approval</outgoing>
+            <outgoing>Flow_high_risk_reject</outgoing>
+        </exclusiveGateway>
+
+        <sequenceFlow id="Flow_to_review_gateway" sourceRef="limit_calc_task" targetRef="review_gateway"/>
+
+        <sequenceFlow id="Flow_manual_review" name="需人工复核"
+                      sourceRef="review_gateway" targetRef="manual_review_task">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${needManualReview == true || loanAmount >= 200000}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="Flow_high_risk_reject" name="高风险拒绝"
+                      sourceRef="review_gateway" targetRef="end_rejected">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${riskLevel == 'HIGH' && fraudResult == 1}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="Flow_to_final_approval" name="直接终审"
+                      sourceRef="review_gateway" targetRef="final_approval_task">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${needManualReview == false && loanAmount < 200000 && (riskLevel != 'HIGH' || fraudResult == 0)}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <userTask id="manual_review_task" name="人工复核"
+                  flowable:candidateGroups="MANAGER"
+                  flowable:formKey="manualReviewForm">
+            <incoming>Flow_manual_review</incoming>
+            <outgoing>Flow_manual_review_gateway</outgoing>
+        </userTask>
+
+        <exclusiveGateway id="manual_review_gateway" name="复核结果">
+            <incoming>Flow_manual_review_gateway</incoming>
+            <outgoing>Flow_review_reject</outgoing>
+            <outgoing>Flow_review_to_final</outgoing>
+        </exclusiveGateway>
+
+        <sequenceFlow id="Flow_manual_review_gateway" sourceRef="manual_review_task" targetRef="manual_review_gateway"/>
+
+        <sequenceFlow id="Flow_review_reject" name="复核拒绝"
+                      sourceRef="manual_review_gateway" targetRef="end_rejected">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${manualReviewResult == 'REJECT'}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="Flow_review_to_final" name="复核通过"
+                      sourceRef="manual_review_gateway" targetRef="final_approval_task">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${manualReviewResult == 'PASS'}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <userTask id="final_approval_task" name="终审"
+                  flowable:candidateGroups="SENIOR_MANAGER"
+                  flowable:formKey="finalApprovalForm">
+            <incoming>Flow_to_final_approval</incoming>
+            <incoming>Flow_review_to_final</incoming>
+            <outgoing>Flow_final_gateway</outgoing>
+        </userTask>
+
+        <exclusiveGateway id="final_gateway" name="终审结果">
+            <incoming>Flow_final_gateway</incoming>
+            <outgoing>Flow_final_reject</outgoing>
+            <outgoing>Flow_final_approve</outgoing>
+        </exclusiveGateway>
+
+        <sequenceFlow id="Flow_final_gateway" sourceRef="final_approval_task" targetRef="final_gateway"/>
+
+        <sequenceFlow id="Flow_final_reject" name="终审拒绝"
+                      sourceRef="final_gateway" targetRef="end_rejected">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${finalApprovalResult == 'REJECT'}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="Flow_final_approve" name="终审通过"
+                      sourceRef="final_gateway" targetRef="approval_notification_task">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${finalApprovalResult == 'PASS'}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <serviceTask id="approval_notification_task" name="审批通过通知"
+                     flowable:delegateExpression="${approvalNotificationDelegate}">
+            <incoming>Flow_final_approve</incoming>
+            <outgoing>Flow_to_approved_end</outgoing>
+        </serviceTask>
+
+        <sequenceFlow id="Flow_to_approved_end" sourceRef="approval_notification_task" targetRef="end_approved"/>
+
+        <endEvent id="end_approved" name="审批通过">
+            <incoming>Flow_to_approved_end</incoming>
+        </endEvent>
+
+        <endEvent id="end_rejected" name="审批拒绝">
+            <incoming>Flow_fraud_reject</incoming>
+            <incoming>Flow_score_reject</incoming>
+            <incoming>Flow_review_reject</incoming>
+            <incoming>Flow_final_reject</incoming>
+            <incoming>Flow_high_risk_reject</incoming>
+        </endEvent>
+
+    </process>
+
+    <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+        <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="credit_approval_process">
+            <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="start_application">
+                <omgdc:Bounds x="100" y="200" width="36" height="36"/>
+                <bpmndi:BPMNLabel>
+                    <omgdc:Bounds x="85" y="240" width="66" height="14"/>
+                </bpmndi:BPMNLabel>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNShape id="ServiceTask_1_di" bpmnElement="credit_query_task">
+                <omgdc:Bounds x="200" y="188" width="100" height="60"/>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNShape id="ServiceTask_2_di" bpmnElement="anti_fraud_task">
+                <omgdc:Bounds x="350" y="188" width="100" height="60"/>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNShape id="Gateway_1_di" bpmnElement="fraud_result_gateway" isMarkerVisible="true">
+                <omgdc:Bounds x="500" y="195" width="50" height="50"/>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNShape id="ServiceTask_3_di" bpmnElement="credit_scoring_task">
+                <omgdc:Bounds x="600" y="188" width="100" height="60"/>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNShape id="Gateway_2_di" bpmnElement="score_gateway" isMarkerVisible="true">
+                <omgdc:Bounds x="750" y="195" width="50" height="50"/>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNShape id="ServiceTask_4_di" bpmnElement="limit_calc_task">
+                <omgdc:Bounds x="850" y="188" width="100" height="60"/>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNShape id="Gateway_3_di" bpmnElement="review_gateway" isMarkerVisible="true">
+                <omgdc:Bounds x="1000" y="195" width="50" height="50"/>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNShape id="UserTask_1_di" bpmnElement="manual_review_task">
+                <omgdc:Bounds x="900" y="350" width="100" height="80"/>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNShape id="Gateway_4_di" bpmnElement="manual_review_gateway" isMarkerVisible="true">
+                <omgdc:Bounds x="1050" y="365" width="50" height="50"/>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNShape id="UserTask_2_di" bpmnElement="final_approval_task">
+                <omgdc:Bounds x="1100" y="178" width="100" height="80"/>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNShape id="Gateway_5_di" bpmnElement="final_gateway" isMarkerVisible="true">
+                <omgdc:Bounds x="1250" y="195" width="50" height="50"/>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNShape id="ServiceTask_5_di" bpmnElement="approval_notification_task">
+                <omgdc:Bounds x="1350" y="188" width="120" height="60"/>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="end_approved">
+                <omgdc:Bounds x="1520" y="200" width="36" height="36"/>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNShape id="EndEvent_2_di" bpmnElement="end_rejected">
+                <omgdc:Bounds x="800" y="450" width="36" height="36"/>
+            </bpmndi:BPMNShape>
+
+            <bpmndi:BPMNEdge id="Flow_to_credit_query_di" bpmnElement="Flow_to_credit_query">
+                <omgdi:waypoint x="136" y="218"/>
+                <omgdi:waypoint x="200" y="218"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_to_anti_fraud_di" bpmnElement="Flow_to_anti_fraud">
+                <omgdi:waypoint x="300" y="218"/>
+                <omgdi:waypoint x="350" y="218"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_to_fraud_gateway_di" bpmnElement="Flow_to_fraud_gateway">
+                <omgdi:waypoint x="450" y="218"/>
+                <omgdi:waypoint x="500" y="220"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_to_scoring_di" bpmnElement="Flow_to_scoring">
+                <omgdi:waypoint x="550" y="220"/>
+                <omgdi:waypoint x="600" y="218"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_to_score_gateway_di" bpmnElement="Flow_to_score_gateway">
+                <omgdi:waypoint x="700" y="218"/>
+                <omgdi:waypoint x="750" y="220"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_to_limit_calc_di" bpmnElement="Flow_to_limit_calc">
+                <omgdi:waypoint x="800" y="220"/>
+                <omgdi:waypoint x="850" y="218"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_to_review_gateway_di" bpmnElement="Flow_to_review_gateway">
+                <omgdi:waypoint x="950" y="218"/>
+                <omgdi:waypoint x="1000" y="220"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_manual_review_di" bpmnElement="Flow_manual_review">
+                <omgdi:waypoint x="1025" y="245"/>
+                <omgdi:waypoint x="1025" y="350"/>
+                <omgdi:waypoint x="900" y="390"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_to_final_approval_di" bpmnElement="Flow_to_final_approval">
+                <omgdi:waypoint x="1050" y="220"/>
+                <omgdi:waypoint x="1100" y="218"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_manual_review_gateway_di" bpmnElement="Flow_manual_review_gateway">
+                <omgdi:waypoint x="1000" y="390"/>
+                <omgdi:waypoint x="1050" y="390"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_review_to_final_di" bpmnElement="Flow_review_to_final">
+                <omgdi:waypoint x="1100" y="390"/>
+                <omgdi:waypoint x="1200" y="390"/>
+                <omgdi:waypoint x="1200" y="218"/>
+                <omgdi:waypoint x="1100" y="218"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_final_gateway_di" bpmnElement="Flow_final_gateway">
+                <omgdi:waypoint x="1200" y="218"/>
+                <omgdi:waypoint x="1250" y="220"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_final_approve_di" bpmnElement="Flow_final_approve">
+                <omgdi:waypoint x="1300" y="220"/>
+                <omgdi:waypoint x="1350" y="218"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_to_approved_end_di" bpmnElement="Flow_to_approved_end">
+                <omgdi:waypoint x="1470" y="218"/>
+                <omgdi:waypoint x="1520" y="218"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_fraud_reject_di" bpmnElement="Flow_fraud_reject">
+                <omgdi:waypoint x="525" y="245"/>
+                <omgdi:waypoint x="525" y="468"/>
+                <omgdi:waypoint x="800" y="468"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_score_reject_di" bpmnElement="Flow_score_reject">
+                <omgdi:waypoint x="775" y="245"/>
+                <omgdi:waypoint x="775" y="468"/>
+                <omgdi:waypoint x="800" y="468"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_review_reject_di" bpmnElement="Flow_review_reject">
+                <omgdi:waypoint x="1075" y="415"/>
+                <omgdi:waypoint x="1075" y="468"/>
+                <omgdi:waypoint x="836" y="468"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_final_reject_di" bpmnElement="Flow_final_reject">
+                <omgdi:waypoint x="1275" y="245"/>
+                <omgdi:waypoint x="1275" y="468"/>
+                <omgdi:waypoint x="836" y="468"/>
+            </bpmndi:BPMNEdge>
+
+            <bpmndi:BPMNEdge id="Flow_high_risk_reject_di" bpmnElement="Flow_high_risk_reject">
+                <omgdi:waypoint x="1025" y="245"/>
+                <omgdi:waypoint x="1025" y="468"/>
+                <omgdi:waypoint x="836" y="468"/>
+            </bpmndi:BPMNEdge>
+
+        </bpmndi:BPMNPlane>
+    </bpmndi:BPMNDiagram>
+
+</definitions>
