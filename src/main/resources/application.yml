@@ -46,11 +46,13 @@ flowable:
   async-executor-activate: true
   database-schema-update: true
   history-level: full
-  idm-engine-enabled: false
-  form-enabled: false
-  content-enabled: false
+  idm-engine-enabled: true
+  form-enabled: true
+  content-enabled: true
   dmn-enabled: false
   cmmn-enabled: false
+  idm:
+    password-encoder: spring_delegating
 
 knife4j:
   enable: true
@@ -71,17 +73,32 @@ credit:
   workflow:
     default-process-key: credit_approval_process
     auto-deploy: true
+    check-before-deploy: true
   credit:
+    mock-enabled: true
     api-url: http://mock-credit-server/api/query
     timeout: 5000
+    mock:
+      default-score: 680
+      min-score: 450
+      max-score: 850
+      delay-ms: 500
   anti-fraud:
-    rule-path: classpath:rules/
+    rule-engine: QL_EXPRESS
+    cache-rules: true
+    cache-expire-minutes: 30
   scoring:
     min-score: 300
     max-score: 900
     pass-score: 600
+    scorecard-version: V1.0
   limit:
     min-amount: 1000
     max-amount: 500000
     manual-review-threshold: 200000
     high-risk-threshold: 500
+  auth:
+    jwt-secret: credit-flow-decider-secret-key-2024
+    jwt-expire-minutes: 720
+    default-admin-user: admin
+    default-admin-password: admin123

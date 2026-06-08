@@ -28,6 +28,8 @@ CREATE TABLE `loan_application` (
     `submit_time` DATETIME NOT NULL COMMENT '提交时间',
     `approve_time` DATETIME DEFAULT NULL COMMENT '审批时间',
     `reject_reason` VARCHAR(512) DEFAULT NULL COMMENT '拒绝原因',
+    `return_count` INT DEFAULT 0 COMMENT '退回次数',
+    `return_reason` VARCHAR(512) DEFAULT NULL COMMENT '退回原因',
     `remark` VARCHAR(512) DEFAULT NULL COMMENT '备注',
     `created_by` VARCHAR(64) DEFAULT NULL COMMENT '创建人',
     `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -263,14 +265,14 @@ CREATE TABLE `scorecard_rule` (
 -- 初始化反欺诈规则数据
 -- =============================================
 INSERT INTO `anti_fraud_rule` (`id`, `rule_code`, `rule_name`, `rule_desc`, `rule_type`, `rule_expression`, `rule_score`, `risk_level`, `action`, `enabled`, `sort_order`) VALUES
-(1, 'FRAUD_001', '黑名单校验', '校验客户是否在黑名单中', 'BLACKLIST', '#customer.idCard in blacklist', 100, 'HIGH', 'REJECT', 1, 1),
-(2, 'FRAUD_002', '短时间多次申请', '1小时内申请次数超过3次', 'BEHAVIOR', '#applicationCount > 3', 50, 'HIGH', 'REJECT', 1, 2),
-(3, 'FRAUD_003', '异常地理位置', 'IP地址归属地与身份证地址不符', 'DEVICE', '#ipLocation != #idCardLocation', 30, 'MEDIUM', 'ALERT', 1, 3),
-(4, 'FRAUD_004', '设备指纹异常', '设备指纹命中风险设备库', 'DEVICE', '#deviceFingerprint in riskDevices', 40, 'HIGH', 'REJECT', 1, 4),
-(5, 'FRAUD_005', '贷款用途可疑', '贷款用途命中可疑关键词', 'BEHAVIOR', '#loanPurpose matches suspiciousKeywords', 20, 'MEDIUM', 'ALERT', 1, 5),
-(6, 'FRAUD_006', '联系人黑名单', '紧急联系人在黑名单中', 'BLACKLIST', '#contactPhone in blacklist', 40, 'HIGH', 'REJECT', 1, 6),
-(7, 'FRAUD_007', '年龄不符合要求', '申请人年龄小于18岁或大于60岁', 'THRESHOLD', '#age < 18 || #age > 60', 60, 'HIGH', 'REJECT', 1, 7),
-(8, 'FRAUD_008', '手机号归属地异常', '手机号归属地与常驻地不符', 'BEHAVIOR', '#phoneLocation != #residentLocation', 15, 'LOW', 'ALERT', 1, 8);
+(1, 'FRAUD_001', '黑名单校验', '校验客户是否在黑名单中', 'BLACKLIST', 'in(idCard, blacklist[0], blacklist[1])', 100, 'HIGH', 'REJECT', 1, 1),
+(2, 'FRAUD_002', '短时间多次申请', '1小时内申请次数超过3次', 'BEHAVIOR', 'applicationCount > 3', 50, 'HIGH', 'REJECT', 1, 2),
+(3, 'FRAUD_003', '异常地理位置', 'IP地址归属地与身份证地址不符', 'DEVICE', 'ipLocation != idCardLocation', 30, 'MEDIUM', 'ALERT', 1, 3),
+(4, 'FRAUD_004', '设备指纹异常', '设备指纹命中风险设备库', 'DEVICE', 'in(deviceInfo, riskDevices[0], riskDevices[1])', 40, 'HIGH', 'REJECT', 1, 4),
+(5, 'FRAUD_005', '贷款用途可疑', '贷款用途命中可疑关键词', 'BEHAVIOR', 'contains(loanPurpose, "投资") || contains(loanPurpose, "赌博") || contains(loanPurpose, "炒股") || contains(loanPurpose, "理财") || contains(loanPurpose, "还贷")', 20, 'MEDIUM', 'ALERT', 1, 5),
+(6, 'FRAUD_006', '联系人黑名单', '紧急联系人在黑名单中', 'BLACKLIST', 'in(contactPhone, blacklist[0], blacklist[1])', 40, 'HIGH', 'REJECT', 1, 6),
+(7, 'FRAUD_007', '年龄不符合要求', '申请人年龄小于18岁或大于60岁', 'THRESHOLD', 'age < 18 || age > 60', 60, 'HIGH', 'REJECT', 1, 7),
+(8, 'FRAUD_008', '手机号归属地异常', '手机号归属地与常驻地不符', 'BEHAVIOR', 'phoneLocation != residentLocation', 15, 'LOW', 'ALERT', 1, 8);
 
 -- =============================================
 -- 初始化信用评分卡维度
@@ -309,3 +311,126 @@ INSERT INTO `scorecard_rule` (`id`, `dimension_id`, `dimension_code`, `rule_code
 (18, 4, 'PERSONAL_INFO', 'PI_005', '自有车辆', '#hasCar == true', 30, 'V1.0', 1, 5),
 (19, 4, 'PERSONAL_INFO', 'PI_006', '本科及以上学历', '#educationLevel >= 4', 40, 'V1.0', 1, 6),
 (20, 4, 'PERSONAL_INFO', 'PI_007', '工作年限5年以上', '#workYears >= 5', 30, 'V1.0', 1, 7);
+
+-- =============================================
+-- 用户表
+-- =============================================
+DROP TABLE IF EXISTS `sys_user`;
+CREATE TABLE `sys_user` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `username` VARCHAR(64) NOT NULL COMMENT '用户名',
+    `password` VARCHAR(256) NOT NULL COMMENT '密码',
+    `real_name` VARCHAR(64) DEFAULT NULL COMMENT '真实姓名',
+    `email` VARCHAR(128) DEFAULT NULL COMMENT '邮箱',
+    `phone` VARCHAR(32) DEFAULT NULL COMMENT '手机号',
+    `org_id` BIGINT DEFAULT NULL COMMENT '组织机构ID',
+    `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态:0-禁用,1-启用',
+    `user_type` VARCHAR(32) DEFAULT 'NORMAL' COMMENT '用户类型:ADMIN-管理员,NORMAL-普通用户,APPROVER-审批员',
+    `avatar` VARCHAR(256) DEFAULT NULL COMMENT '头像',
+    `remark` VARCHAR(512) DEFAULT NULL COMMENT '备注',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记:0-未删除,1-已删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_username` (`username`),
+    KEY `idx_org_id` (`org_id`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+
+-- =============================================
+-- 角色表
+-- =============================================
+DROP TABLE IF EXISTS `sys_role`;
+CREATE TABLE `sys_role` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `role_code` VARCHAR(64) NOT NULL COMMENT '角色编码',
+    `role_name` VARCHAR(128) NOT NULL COMMENT '角色名称',
+    `role_desc` VARCHAR(512) DEFAULT NULL COMMENT '角色描述',
+    `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态:0-禁用,1-启用',
+    `sort_order` INT NOT NULL DEFAULT 0 COMMENT '排序',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记:0-未删除,1-已删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_role_code` (`role_code`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色表';
+
+-- =============================================
+-- 组织机构表
+-- =============================================
+DROP TABLE IF EXISTS `sys_org`;
+CREATE TABLE `sys_org` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `org_code` VARCHAR(64) NOT NULL COMMENT '机构编码',
+    `org_name` VARCHAR(128) NOT NULL COMMENT '机构名称',
+    `parent_id` BIGINT DEFAULT 0 COMMENT '父机构ID',
+    `org_level` INT DEFAULT 1 COMMENT '机构层级',
+    `org_type` VARCHAR(32) DEFAULT 'DEPARTMENT' COMMENT '机构类型:COMPANY-公司,DEPARTMENT-部门,TEAM-小组',
+    `manager` VARCHAR(64) DEFAULT NULL COMMENT '负责人',
+    `phone` VARCHAR(32) DEFAULT NULL COMMENT '联系电话',
+    `address` VARCHAR(256) DEFAULT NULL COMMENT '地址',
+    `sort_order` INT NOT NULL DEFAULT 0 COMMENT '排序',
+    `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态:0-禁用,1-启用',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记:0-未删除,1-已删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_org_code` (`org_code`),
+    KEY `idx_parent_id` (`parent_id`),
+    KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='组织机构表';
+
+-- =============================================
+-- 用户角色关联表
+-- =============================================
+DROP TABLE IF EXISTS `sys_user_role`;
+CREATE TABLE `sys_user_role` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `user_id` BIGINT NOT NULL COMMENT '用户ID',
+    `role_id` BIGINT NOT NULL COMMENT '角色ID',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记:0-未删除,1-已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_role_id` (`role_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户角色关联表';
+
+-- =============================================
+-- 初始化组织机构数据
+-- =============================================
+INSERT INTO `sys_org` (`id`, `org_code`, `org_name`, `parent_id`, `org_level`, `org_type`, `manager`, `phone`, `sort_order`) VALUES
+(1, 'BC_CREDIT', '北京银行信贷中心', 0, 1, 'COMPANY', '张总', '010-88888888', 1),
+(2, 'RISK_DEPT', '风险管理部', 1, 2, 'DEPARTMENT', '李经理', '010-88888801', 1),
+(3, 'CREDIT_DEPT', '信贷审批部', 1, 2, 'DEPARTMENT', '王经理', '010-88888802', 2),
+(4, 'OPERATION_DEPT', '运营管理部', 1, 2, 'DEPARTMENT', '赵经理', '010-88888803', 3),
+(5, 'FIRST_APPROVAL', '初审组', 3, 3, 'TEAM', '孙组长', '010-88888811', 1),
+(6, 'FINAL_APPROVAL', '终审组', 3, 3, 'TEAM', '周组长', '010-88888812', 2);
+
+-- =============================================
+-- 初始化角色数据
+-- =============================================
+INSERT INTO `sys_role` (`id`, `role_code`, `role_name`, `role_desc`, `sort_order`) VALUES
+(1, 'ADMIN', '系统管理员', '拥有系统所有权限', 1),
+(2, 'CUSTOMER', '客户', '贷款申请人', 2),
+(3, 'FIRST_APPROVER', '初审员', '一级审批人员', 3),
+(4, 'FINAL_APPROVER', '终审员', '终审审批人员', 4),
+(5, 'RISK_OFFICER', '风控官', '风险管理人员', 5);
+
+-- =============================================
+-- 初始化用户数据 (密码: 123456, 通过BCrypt加密)
+-- =============================================
+INSERT INTO `sys_user` (`id`, `username`, `password`, `real_name`, `email`, `phone`, `org_id`, `status`, `user_type`, `remark`) VALUES
+(1, 'admin', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '系统管理员', 'admin@bc.com', '13800138000', 1, 1, 'ADMIN', '系统默认管理员'),
+(2, 'customer001', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '张三', 'zhangsan@example.com', '13800138001', 1, 1, 'NORMAL', '测试客户'),
+(3, 'approver01', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '李初审', 'lifirst@bc.com', '13800138002', 5, 1, 'APPROVER', '初审员'),
+(4, 'approver02', '$2a$10$7JB720yubVSZvUI0rEqK/.VqGOZTH.ulu33dHOiBE8ByOhJIrdAu2', '王终审', 'wangfinal@bc.com', '13800138003', 6, 1, 'APPROVER', '终审员');
+
+-- =============================================
+-- 初始化用户角色关联数据
+-- =============================================
+INSERT INTO `sys_user_role` (`id`, `user_id`, `role_id`) VALUES
+(1, 1, 1),
+(2, 2, 2),
+(3, 3, 3),
+(4, 4, 4);

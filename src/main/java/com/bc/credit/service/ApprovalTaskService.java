@@ -1,6 +1,5 @@
 package com.bc.credit.service;
 
-import com.bc.credit.entity.LoanApplication;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +15,8 @@ public interface ApprovalTaskService {
 
     void completeFinalApproval(String taskId, String assignee, String result, String opinion,
                                BigDecimal approveAmount, Integer approveTerm, BigDecimal interestRate);
+
+    void returnTask(String taskId, String assignee, String targetNodeId, String opinion);
 
     void completeTask(String taskId, String assignee, Map<String, Object> variables);
 

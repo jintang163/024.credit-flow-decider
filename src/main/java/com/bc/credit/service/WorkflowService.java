@@ -11,6 +11,8 @@ public interface WorkflowService {
 
     String deployProcessFromFile(String filePath, String processName, String deployBy);
 
+    String getProcessDefinitionId(String processKey);
+
     Map<String, Object> startProcess(String processKey, LoanApplication application,
                                      LoanApplicationDTO applicationDTO);
 

@@ -56,6 +56,10 @@ public class LoanApplication implements Serializable {
 
     private String rejectReason;
 
+    private Integer returnCount;
+
+    private String returnReason;
+
     private String remark;
 
     private String createdBy;

@@ -56,7 +56,7 @@ public class ApprovalTaskController {
     public Result<Void> completeManualReview(
             @ApiParam("任务ID") @RequestParam String taskId,
             @ApiParam("处理人") @RequestParam String assignee,
-            @ApiParam("审批结果: PASS-通过, REJECT-拒绝") @RequestParam String result,
+            @ApiParam("审批结果: PASS-通过, REJECT-拒绝, RETURN-退回") @RequestParam String result,
             @ApiParam("审批意见") @RequestParam(required = false) String opinion,
             @ApiParam("审批金额") @RequestParam(required = false) BigDecimal approveAmount,
             @ApiParam("审批期限") @RequestParam(required = false) Integer approveTerm,
@@ -76,7 +76,7 @@ public class ApprovalTaskController {
     public Result<Void> completeFinalApproval(
             @ApiParam("任务ID") @RequestParam String taskId,
             @ApiParam("处理人") @RequestParam String assignee,
-            @ApiParam("审批结果: PASS-通过, REJECT-拒绝") @RequestParam String result,
+            @ApiParam("审批结果: PASS-通过, REJECT-拒绝, RETURN-退回") @RequestParam String result,
             @ApiParam("审批意见") @RequestParam(required = false) String opinion,
             @ApiParam("审批金额") @RequestParam(required = false) BigDecimal approveAmount,
             @ApiParam("审批期限") @RequestParam(required = false) Integer approveTerm,
@@ -88,6 +88,22 @@ public class ApprovalTaskController {
         } catch (Exception e) {
             log.error("终审失败", e);
             return Result.error("审批失败: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/task/return")
+    @ApiOperation("退回任务到指定节点")
+    public Result<Void> returnTask(
+            @ApiParam("任务ID") @RequestParam String taskId,
+            @ApiParam("处理人") @RequestParam String assignee,
+            @ApiParam("目标节点ID") @RequestParam String targetNodeId,
+            @ApiParam("退回意见") @RequestParam(required = false) String opinion) {
+        try {
+            approvalTaskService.returnTask(taskId, assignee, targetNodeId, opinion);
+            return Result.success("退回成功", null);
+        } catch (Exception e) {
+            log.error("退回任务失败", e);
+            return Result.error("退回失败: " + e.getMessage());
         }
     }
 

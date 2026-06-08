@@ -9,7 +9,10 @@ public enum ApplicationStatusEnum {
     APPROVING(1, "审批中"),
     APPROVED(2, "审批通过"),
     REJECTED(3, "审批拒绝"),
-    WITHDRAWN(4, "已撤回");
+    WITHDRAWN(4, "已撤回"),
+    SUPPLEMENTING(5, "补充资料中"),
+    REVIEWING(6, "复核中"),
+    RETURNED(7, "已退回");
 
     private final Integer code;
     private final String desc;

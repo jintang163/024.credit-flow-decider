@@ -10,9 +10,11 @@ import com.bc.credit.mapper.LoanApplicationMapper;
 import com.bc.credit.service.ApprovalTaskService;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.HistoryService;
+import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricActivityInstance;
 import org.flowable.engine.history.HistoricProcessInstance;
+import org.flowable.engine.runtime.Execution;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
 import org.flowable.task.api.history.HistoricTaskInstance;
@@ -34,6 +36,9 @@ public class ApprovalTaskServiceImpl implements ApprovalTaskService {
 
     @Autowired
     private HistoryService historyService;
+
+    @Autowired
+    private RuntimeService runtimeService;
 
     @Autowired
     private LoanApplicationMapper loanApplicationMapper;
@@ -86,6 +91,9 @@ public class ApprovalTaskServiceImpl implements ApprovalTaskService {
             result.put("application", application);
         }
 
+        List<Map<String, Object>> returnableNodes = getReturnableNodes(task);
+        result.put("returnableNodes", returnableNodes);
+
         return result;
     }
 
@@ -104,6 +112,8 @@ public class ApprovalTaskServiceImpl implements ApprovalTaskService {
         claimTask(taskId, assignee);
 
         Map<String, Object> variables = new HashMap<>();
+        variables.put("outcome", result);
+        variables.put("comment", opinion);
         variables.put("manualReviewResult", result);
         variables.put("manualReviewOpinion", opinion);
         variables.put("manualReviewer", assignee);
@@ -111,8 +121,12 @@ public class ApprovalTaskServiceImpl implements ApprovalTaskService {
 
         Long applicationId = (Long) taskService.getVariable(taskId, "applicationId");
 
+        String approveNode = "PASS".equals(result) ? "人工复核通过" :
+                            "REJECT".equals(result) ? "人工复核拒绝" :
+                            "RETURN".equals(result) ? "人工复核退回补件" : "人工复核";
+
         saveApprovalRecord(applicationId, task.getProcessInstanceId(), taskId,
-                task.getTaskDefinitionKey(), task.getName(), "人工复核",
+                task.getTaskDefinitionKey(), task.getName(), approveNode,
                 assignee, "PASS".equals(result) ? 0 : 1, opinion,
                 approveAmount, approveTerm, interestRate);
 
@@ -123,6 +137,10 @@ public class ApprovalTaskServiceImpl implements ApprovalTaskService {
             application.setApproveTime(LocalDateTime.now());
             application.setUpdatedTime(LocalDateTime.now());
             loanApplicationMapper.updateById(application);
+        }
+
+        if ("RETURN".equals(result)) {
+            handleReturnTask(task, applicationId, assignee, opinion, "rework_task");
         }
 
         taskService.complete(taskId, variables);
@@ -145,6 +163,8 @@ public class ApprovalTaskServiceImpl implements ApprovalTaskService {
         claimTask(taskId, assignee);
 
         Map<String, Object> variables = new HashMap<>();
+        variables.put("outcome", result);
+        variables.put("comment", opinion);
         variables.put("finalApprovalResult", result);
         variables.put("finalApprovalOpinion", opinion);
         variables.put("finalApprover", assignee);
@@ -152,8 +172,12 @@ public class ApprovalTaskServiceImpl implements ApprovalTaskService {
 
         Long applicationId = (Long) taskService.getVariable(taskId, "applicationId");
 
+        String approveNode = "PASS".equals(result) ? "终审通过" :
+                            "REJECT".equals(result) ? "终审拒绝" :
+                            "RETURN".equals(result) ? "终审退回复核" : "终审";
+
         saveApprovalRecord(applicationId, task.getProcessInstanceId(), taskId,
-                task.getTaskDefinitionKey(), task.getName(), "终审",
+                task.getTaskDefinitionKey(), task.getName(), approveNode,
                 assignee, "PASS".equals(result) ? 0 : 1, opinion,
                 approveAmount, approveTerm, interestRate);
 
@@ -163,7 +187,7 @@ public class ApprovalTaskServiceImpl implements ApprovalTaskService {
             application.setApprovedAmount(approveAmount);
             application.setApprovedTerm(approveTerm);
             application.setInterestRate(interestRate);
-        } else {
+        } else if ("REJECT".equals(result)) {
             application.setApplicationStatus(ApplicationStatusEnum.REJECTED.getCode());
             application.setRejectReason(opinion);
         }
@@ -171,9 +195,115 @@ public class ApprovalTaskServiceImpl implements ApprovalTaskService {
         application.setUpdatedTime(LocalDateTime.now());
         loanApplicationMapper.updateById(application);
 
+        if ("RETURN".equals(result)) {
+            handleReturnTask(task, applicationId, assignee, opinion, "manual_review_task");
+        }
+
         taskService.complete(taskId, variables);
 
         log.info("终审任务完成, taskId: {}, result: {}", taskId, result);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void returnTask(String taskId, String assignee, String targetNodeId, String opinion) {
+        log.info("退回任务, taskId: {}, assignee: {}, targetNodeId: {}", taskId, assignee, targetNodeId);
+
+        Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
+        if (task == null) {
+            throw new RuntimeException("任务不存在: " + taskId);
+        }
+
+        claimTask(taskId, assignee);
+
+        Long applicationId = (Long) taskService.getVariable(taskId, "applicationId");
+
+        String returnNodeName = getReturnNodeName(targetNodeId);
+        saveApprovalRecord(applicationId, task.getProcessInstanceId(), taskId,
+                task.getTaskDefinitionKey(), task.getName(), "退回至" + returnNodeName,
+                assignee, 2, opinion, null, null, null);
+
+        handleReturnTask(task, applicationId, assignee, opinion, targetNodeId);
+
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("outcome", "RETURN");
+        variables.put("comment", opinion);
+        variables.put("returnTarget", targetNodeId);
+        taskService.complete(taskId, variables);
+
+        log.info("任务退回完成, taskId: {}, targetNodeId: {}", taskId, targetNodeId);
+    }
+
+    private void handleReturnTask(Task task, Long applicationId, String assignee,
+                                   String opinion, String targetNodeId) {
+        try {
+            String processInstanceId = task.getProcessInstanceId();
+
+            LoanApplication application = loanApplicationMapper.selectById(applicationId);
+            if (application != null) {
+                if ("rework_task".equals(targetNodeId)) {
+                    application.setApplicationStatus(ApplicationStatusEnum.SUPPLEMENTING.getCode());
+                } else if ("manual_review_task".equals(targetNodeId)) {
+                    application.setApplicationStatus(ApplicationStatusEnum.REVIEWING.getCode());
+                } else {
+                    application.setApplicationStatus(ApplicationStatusEnum.RETURNED.getCode());
+                }
+                application.setReturnReason(opinion);
+                application.setReturnCount(application.getReturnCount() != null
+                        ? application.getReturnCount() + 1 : 1);
+                application.setUpdatedTime(LocalDateTime.now());
+                loanApplicationMapper.updateById(application);
+            }
+
+            log.info("流程退回处理完成, processInstanceId: {}, targetNode: {}, returnReason: {}",
+                    processInstanceId, targetNodeId, opinion);
+
+        } catch (Exception e) {
+            log.error("处理流程退回失败", e);
+            throw new RuntimeException("处理流程退回失败: " + e.getMessage());
+        }
+    }
+
+    private List<Map<String, Object>> getReturnableNodes(Task task) {
+        List<Map<String, Object>> nodes = new ArrayList<>();
+
+        String taskKey = task.getTaskDefinitionKey();
+
+        if ("final_approval_task".equals(taskKey)) {
+            Map<String, Object> node1 = new HashMap<>();
+            node1.put("nodeId", "manual_review_task");
+            node1.put("nodeName", "人工复核");
+            nodes.add(node1);
+
+            Map<String, Object> node2 = new HashMap<>();
+            node2.put("nodeId", "rework_task");
+            node2.put("nodeName", "补充资料");
+            nodes.add(node2);
+        }
+
+        if ("manual_review_task".equals(taskKey)) {
+            Map<String, Object> node = new HashMap<>();
+            node.put("nodeId", "rework_task");
+            node.put("nodeName", "补充资料");
+            nodes.add(node);
+        }
+
+        return nodes;
+    }
+
+    private String getReturnNodeName(String nodeId) {
+        switch (nodeId) {
+            case "rework_task":
+                return "补充资料";
+            case "manual_review_task":
+                return "人工复核";
+            case "final_approval_task":
+                return "终审";
+            case "credit_scoring_task":
+                return "信用评分";
+            default:
+                return nodeId;
+        }
     }
 
     @Override
@@ -284,6 +414,8 @@ public class ApprovalTaskServiceImpl implements ApprovalTaskService {
                 map.put("customerName", application.getCustomerName());
                 map.put("loanAmount", application.getLoanAmount());
                 map.put("loanTerm", application.getLoanTerm());
+                map.put("returnCount", application.getReturnCount());
+                map.put("returnReason", application.getReturnReason());
             }
         }
 
