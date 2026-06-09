@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: credit-flow-decider
+  cloud:
+    config:
+      enabled: false
+      uri: http://localhost:8888
+      fail-fast: false

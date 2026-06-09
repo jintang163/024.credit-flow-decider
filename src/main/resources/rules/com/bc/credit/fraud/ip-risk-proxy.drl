@@ -1,0 +1,23 @@
+package com.bc.credit.fraud;
+
+import com.bc.credit.dto.AntiFraudRuleFact;
+
+rule "ip_risk_proxy_pool"
+    no-loop
+    @ruleCode("FRAUD_DROOLS_002")
+    @ruleType("DEVICE")
+    @score(50)
+    @riskLevel("HIGH")
+    @action("REJECT")
+    when
+        $fact : AntiFraudRuleFact( ipInRiskProxyPool == true )
+    then
+        $fact.setHit(true);
+        $fact.setHitRuleCode("FRAUD_DROOLS_002");
+        $fact.setHitRuleName("ip_risk_proxy_pool");
+        $fact.setHitScore(50);
+        $fact.setHitRiskLevel("HIGH");
+        $fact.setHitAction("REJECT");
+        $fact.setHitDetail("IP " + $fact.getIpAddress() + " belongs to high-risk proxy pool");
+        modify($fact);
+end

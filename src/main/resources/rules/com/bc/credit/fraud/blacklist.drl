@@ -1,0 +1,43 @@
+package com.bc.credit.fraud;
+
+import com.bc.credit.dto.AntiFraudRuleFact;
+
+rule "contact_in_blacklist"
+    no-loop
+    @ruleCode("FRAUD_DROOLS_003")
+    @ruleType("BLACKLIST")
+    @score(100)
+    @riskLevel("HIGH")
+    @action("REJECT")
+    when
+        $fact : AntiFraudRuleFact( contactInBlacklist == true )
+    then
+        $fact.setHit(true);
+        $fact.setHitRuleCode("FRAUD_DROOLS_003");
+        $fact.setHitRuleName("contact_in_blacklist");
+        $fact.setHitScore(100);
+        $fact.setHitRiskLevel("HIGH");
+        $fact.setHitAction("REJECT");
+        $fact.setHitDetail("Contact phone " + $fact.getContactPhone() + " is in blacklist");
+        modify($fact);
+end
+
+rule "idcard_in_blacklist"
+    no-loop
+    @ruleCode("FRAUD_DROOLS_004")
+    @ruleType("BLACKLIST")
+    @score(100)
+    @riskLevel("HIGH")
+    @action("REJECT")
+    when
+        $fact : AntiFraudRuleFact( blacklist != null , blacklist contains idCard )
+    then
+        $fact.setHit(true);
+        $fact.setHitRuleCode("FRAUD_DROOLS_004");
+        $fact.setHitRuleName("idcard_in_blacklist");
+        $fact.setHitScore(100);
+        $fact.setHitRiskLevel("HIGH");
+        $fact.setHitAction("REJECT");
+        $fact.setHitDetail("ID card " + $fact.getIdCard() + " is in blacklist");
+        modify($fact);
+end

@@ -122,9 +122,16 @@ credit:
       api-url: http://localhost:8084
       api-key: housing-fund-key-2024
   anti-fraud:
-    rule-engine: QL_EXPRESS
+    rule-engine: DROOLS
     cache-rules: true
     cache-expire-minutes: 30
+    drools:
+      enabled: true
+      rule-packages: com.bc.credit.fraud
+      auto-reload: true
+      reload-interval-ms: 300000
+    ab-test:
+      enabled: true
   scoring:
     min-score: 300
     max-score: 900
@@ -165,6 +172,15 @@ rocketmq:
     credit-callback: credit-async-callback
   tag:
     credit-callback: credit
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,refresh,env
+  endpoint:
+    health:
+      show-details: always
 
 resilience4j:
   circuitbreaker:

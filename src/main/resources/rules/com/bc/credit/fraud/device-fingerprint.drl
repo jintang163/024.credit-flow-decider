@@ -1,0 +1,23 @@
+package com.bc.credit.fraud;
+
+import com.bc.credit.dto.AntiFraudRuleFact;
+
+rule "device_fingerprint_assoc"
+    no-loop
+    @ruleCode("FRAUD_DROOLS_001")
+    @ruleType("DEVICE")
+    @score(60)
+    @riskLevel("HIGH")
+    @action("REJECT")
+    when
+        $fact : AntiFraudRuleFact( deviceFingerprintAssocCount >= 3 )
+    then
+        $fact.setHit(true);
+        $fact.setHitRuleCode("FRAUD_DROOLS_001");
+        $fact.setHitRuleName("device_fingerprint_assoc");
+        $fact.setHitScore(60);
+        $fact.setHitRiskLevel("HIGH");
+        $fact.setHitAction("REJECT");
+        $fact.setHitDetail("Device fingerprint associated with " + $fact.getDeviceFingerprintAssocCount() + " ID cards within 1 hour");
+        modify($fact);
+end

@@ -1,0 +1,43 @@
+package com.bc.credit.fraud;
+
+import com.bc.credit.dto.AntiFraudRuleFact;
+
+rule "debt_ratio_high"
+    no-loop
+    @ruleCode("FRAUD_DROOLS_006")
+    @ruleType("THRESHOLD")
+    @score(50)
+    @riskLevel("HIGH")
+    @action("REDUCE_LIMIT")
+    when
+        $fact : AntiFraudRuleFact( debtRatio != null , debtRatio > 0.70 )
+    then
+        $fact.setHit(true);
+        $fact.setHitRuleCode("FRAUD_DROOLS_006");
+        $fact.setHitRuleName("debt_ratio_high");
+        $fact.setHitScore(50);
+        $fact.setHitRiskLevel("HIGH");
+        $fact.setHitAction("REDUCE_LIMIT");
+        $fact.setHitDetail("Debt ratio " + $fact.getDebtRatio() + " exceeds 70% threshold");
+        modify($fact);
+end
+
+rule "debt_ratio_medium"
+    no-loop
+    @ruleCode("FRAUD_DROOLS_007")
+    @ruleType("THRESHOLD")
+    @score(25)
+    @riskLevel("MEDIUM")
+    @action("ALERT")
+    when
+        $fact : AntiFraudRuleFact( debtRatio != null , debtRatio > 0.50 , debtRatio <= 0.70 )
+    then
+        $fact.setHit(true);
+        $fact.setHitRuleCode("FRAUD_DROOLS_007");
+        $fact.setHitRuleName("debt_ratio_medium");
+        $fact.setHitScore(25);
+        $fact.setHitRiskLevel("MEDIUM");
+        $fact.setHitAction("ALERT");
+        $fact.setHitDetail("Debt ratio " + $fact.getDebtRatio() + " between 50%-70%");
+        modify($fact);
+end

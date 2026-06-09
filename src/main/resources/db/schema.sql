@@ -488,3 +488,95 @@ CREATE TABLE `credit_api_call_log` (
     KEY `idx_call_time` (`call_time`),
     KEY `idx_success` (`success`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='征信API调用日志表';
+
+-- =============================================
+-- 反欺诈规则执行日志表
+-- =============================================
+DROP TABLE IF EXISTS `fraud_rule_execution_log`;
+CREATE TABLE `fraud_rule_execution_log` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `application_id` BIGINT DEFAULT NULL COMMENT '申请ID',
+    `application_no` VARCHAR(64) DEFAULT NULL COMMENT '申请编号',
+    `customer_id` VARCHAR(64) DEFAULT NULL COMMENT '客户ID',
+    `rule_group` VARCHAR(32) DEFAULT 'default' COMMENT '规则组:default/A/B',
+    `rule_version` VARCHAR(32) DEFAULT NULL COMMENT '规则版本',
+    `rule_code` VARCHAR(64) NOT NULL COMMENT '规则编码',
+    `rule_name` VARCHAR(128) NOT NULL COMMENT '规则名称',
+    `rule_type` VARCHAR(32) DEFAULT NULL COMMENT '规则类型:BLACKLIST-黑名单,THRESHOLD-阈值,DEVICE-设备,BEHAVIOR-行为',
+    `hit` TINYINT NOT NULL DEFAULT 0 COMMENT '是否命中:0-否,1-是',
+    `hit_score` INT DEFAULT 0 COMMENT '命中分值',
+    `risk_level` VARCHAR(32) DEFAULT NULL COMMENT '风险等级:LOW-低,MEDIUM-中,HIGH-高',
+    `action` VARCHAR(32) DEFAULT NULL COMMENT '触发动作:PASS-通过,ALERT-告警,REJECT-拒绝,REDUCE_LIMIT-降额',
+    `hit_detail` VARCHAR(512) DEFAULT NULL COMMENT '命中详情',
+    `execution_time_ms` BIGINT DEFAULT NULL COMMENT '执行耗时(毫秒)',
+    `engine_type` VARCHAR(32) DEFAULT 'QL_EXPRESS' COMMENT '引擎类型:QL_EXPRESS/DROOLS',
+    `execution_time` DATETIME NOT NULL COMMENT '执行时间',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记:0-未删除,1-已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_application_id` (`application_id`),
+    KEY `idx_customer_id` (`customer_id`),
+    KEY `idx_rule_code` (`rule_code`),
+    KEY `idx_rule_group` (`rule_group`),
+    KEY `idx_engine_type` (`engine_type`),
+    KEY `idx_execution_time` (`execution_time`),
+    KEY `idx_hit` (`hit`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='反欺诈规则执行日志表';
+
+-- =============================================
+-- 反欺诈规则A/B测试表
+-- =============================================
+DROP TABLE IF EXISTS `fraud_rule_ab_test`;
+CREATE TABLE `fraud_rule_ab_test` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `test_name` VARCHAR(128) NOT NULL COMMENT '测试名称',
+    `test_desc` VARCHAR(512) DEFAULT NULL COMMENT '测试描述',
+    `group_a_name` VARCHAR(64) DEFAULT 'A组' COMMENT 'A组名称',
+    `group_a_rule_content` TEXT COMMENT 'A组DRL规则内容',
+    `group_b_name` VARCHAR(64) DEFAULT 'B组' COMMENT 'B组名称',
+    `group_b_rule_content` TEXT COMMENT 'B组DRL规则内容',
+    `traffic_ratio_a` INT DEFAULT 50 COMMENT 'A组流量占比(0-100)',
+    `traffic_ratio_b` INT DEFAULT 50 COMMENT 'B组流量占比(0-100)',
+    `status` VARCHAR(32) NOT NULL DEFAULT 'CREATED' COMMENT '状态:CREATED-已创建,RUNNING-运行中,COMPLETED-已完成,STOPPED-已停止',
+    `start_time` DATETIME DEFAULT NULL COMMENT '开始时间',
+    `end_time` DATETIME DEFAULT NULL COMMENT '结束时间',
+    `total_samples` INT DEFAULT 0 COMMENT '总样本数',
+    `group_a_samples` INT DEFAULT 0 COMMENT 'A组样本数',
+    `group_b_samples` INT DEFAULT 0 COMMENT 'B组样本数',
+    `group_a_reject_count` INT DEFAULT 0 COMMENT 'A组拒绝数',
+    `group_b_reject_count` INT DEFAULT 0 COMMENT 'B组拒绝数',
+    `group_a_alert_count` INT DEFAULT 0 COMMENT 'A组告警数',
+    `group_b_alert_count` INT DEFAULT 0 COMMENT 'B组告警数',
+    `created_by` VARCHAR(64) DEFAULT NULL COMMENT '创建人',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记:0-未删除,1-已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_status` (`status`),
+    KEY `idx_test_name` (`test_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='反欺诈规则A/B测试表';
+
+-- =============================================
+-- 反欺诈规则命中率统计表
+-- =============================================
+DROP TABLE IF EXISTS `fraud_rule_hit_stats`;
+CREATE TABLE `fraud_rule_hit_stats` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `rule_code` VARCHAR(64) NOT NULL COMMENT '规则编码',
+    `rule_name` VARCHAR(128) NOT NULL COMMENT '规则名称',
+    `rule_group` VARCHAR(32) DEFAULT 'default' COMMENT '规则组',
+    `stats_date` VARCHAR(10) NOT NULL COMMENT '统计日期(yyyy-MM-dd)',
+    `execute_count` BIGINT DEFAULT 0 COMMENT '执行次数',
+    `hit_count` BIGINT DEFAULT 0 COMMENT '命中次数',
+    `hit_rate` DECIMAL(10,2) DEFAULT 0 COMMENT '命中率(%)',
+    `avg_score` BIGINT DEFAULT 0 COMMENT '平均分值',
+    `reject_count` BIGINT DEFAULT 0 COMMENT '拒绝次数',
+    `alert_count` BIGINT DEFAULT 0 COMMENT '告警次数',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记:0-未删除,1-已删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_rule_date_group` (`rule_code`, `stats_date`, `rule_group`),
+    KEY `idx_stats_date` (`stats_date`),
+    KEY `idx_rule_group` (`rule_group`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='反欺诈规则命中率统计表';

@@ -64,6 +64,9 @@ public class ProcessVariableConstants {
     public static final String FRAUD_CHECK_RESULT = "fraudCheckResult";
     public static final String FRAUD_RULE_COUNT = "fraudRuleCount";
     public static final String FRAUD_CHECK_SUCCESS = "fraudCheckSuccess";
+    public static final String FRAUD_ERROR = "fraudError";
+    public static final String FRAUD_RESULT = "fraudResult";
+    public static final String ANTI_FRAUD_RESULT_ID = "antiFraudResultId";
 
     public static final String CREDIT_SCORING_RESULT = "creditScoringResult";
     public static final String RISK_LEVEL = "riskLevel";

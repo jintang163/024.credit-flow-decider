@@ -1,0 +1,23 @@
+package com.bc.credit.fraud;
+
+import com.bc.credit.dto.AntiFraudRuleFact;
+
+rule "multi_head_lending_7d"
+    no-loop
+    @ruleCode("FRAUD_DROOLS_005")
+    @ruleType("BEHAVIOR")
+    @score(40)
+    @riskLevel("MEDIUM")
+    @action("ALERT")
+    when
+        $fact : AntiFraudRuleFact( multiHeadLendingCount7d >= 5 )
+    then
+        $fact.setHit(true);
+        $fact.setHitRuleCode("FRAUD_DROOLS_005");
+        $fact.setHitRuleName("multi_head_lending_7d");
+        $fact.setHitScore(40);
+        $fact.setHitRiskLevel("MEDIUM");
+        $fact.setHitAction("ALERT");
+        $fact.setHitDetail("Multi-head lending count in 7 days: " + $fact.getMultiHeadLendingCount7d());
+        modify($fact);
+end

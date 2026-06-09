@@ -6,35 +6,23 @@ import java.math.BigDecimal;
 import java.util.List;
 
 @Data
-public class AntiFraudCheckResultDTO implements Serializable {
+public class RuleExecutionResultDTO implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
     private String customerId;
-
-    private Integer fraudScore;
-
-    private String riskLevel;
-
-    private List<String> hitRules;
-
-    private Integer ruleCount;
-
-    private Integer checkResult;
-
-    private String remark;
-
+    private String applicationNo;
     private boolean hitFlag;
-
-    private boolean hardReject;
-
-    private boolean needManualReview;
-
-    private BigDecimal adjustedLimitRatio;
-
+    private int riskScore;
+    private String riskLevel;
+    private String checkResult;
     private List<RuleHitDetailDTO> hitDetails;
-
+    private int hitRuleCount;
+    private boolean hardReject;
+    private boolean needManualReview;
+    private BigDecimal adjustedLimitRatio;
     private String ruleGroup;
-
     private String ruleVersion;
+    private long totalExecutionTimeMs;
+    private String remark;
 }
