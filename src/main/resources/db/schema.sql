@@ -225,7 +225,9 @@ CREATE TABLE `anti_fraud_rule` (
     `rule_name` VARCHAR(128) NOT NULL COMMENT '规则名称',
     `rule_desc` VARCHAR(512) DEFAULT NULL COMMENT '规则描述',
     `rule_type` VARCHAR(32) NOT NULL COMMENT '规则类型:BLACKLIST-黑名单,THRESHOLD-阈值,DEVICE-设备,BEHAVIOR-行为',
-    `rule_expression` TEXT NOT NULL COMMENT '规则表达式',
+    `rule_expression` TEXT COMMENT '规则表达式(历史兼容)',
+    `drl_content` TEXT COMMENT 'DRL规则内容',
+    `rule_version` VARCHAR(32) DEFAULT NULL COMMENT '规则版本',
     `rule_score` INT NOT NULL DEFAULT 0 COMMENT '规则分值',
     `risk_level` VARCHAR(32) NOT NULL DEFAULT 'LOW' COMMENT '风险等级:LOW-低,MEDIUM-中,HIGH-高',
     `action` VARCHAR(32) NOT NULL DEFAULT 'PASS' COMMENT '触发动作:PASS-通过,ALERT-告警,REJECT-拒绝',
@@ -509,7 +511,7 @@ CREATE TABLE `fraud_rule_execution_log` (
     `action` VARCHAR(32) DEFAULT NULL COMMENT '触发动作:PASS-通过,ALERT-告警,REJECT-拒绝,REDUCE_LIMIT-降额',
     `hit_detail` VARCHAR(512) DEFAULT NULL COMMENT '命中详情',
     `execution_time_ms` BIGINT DEFAULT NULL COMMENT '执行耗时(毫秒)',
-    `engine_type` VARCHAR(32) DEFAULT 'QL_EXPRESS' COMMENT '引擎类型:QL_EXPRESS/DROOLS',
+    `engine_type` VARCHAR(32) DEFAULT 'DROOLS' COMMENT '引擎类型:DROOLS',
     `execution_time` DATETIME NOT NULL COMMENT '执行时间',
     `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记:0-未删除,1-已删除',
@@ -580,3 +582,89 @@ CREATE TABLE `fraud_rule_hit_stats` (
     KEY `idx_stats_date` (`stats_date`),
     KEY `idx_rule_group` (`rule_group`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='反欺诈规则命中率统计表';
+
+-- =============================================
+-- 反欺诈黑名单表
+-- =============================================
+DROP TABLE IF EXISTS `fraud_blacklist`;
+CREATE TABLE `fraud_blacklist` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `target_type` VARCHAR(32) NOT NULL COMMENT '目标类型:IDCARD-身份证,PHONE-手机号,DEVICE-设备ID,IP-IP地址',
+    `target_value` VARCHAR(128) NOT NULL COMMENT '目标值',
+    `source` VARCHAR(64) DEFAULT NULL COMMENT '来源:MANUAL-手动添加,EXTERNAL-外部API,SYSTEM-系统检测',
+    `reason` VARCHAR(512) DEFAULT NULL COMMENT '加入黑名单原因',
+    `risk_level` VARCHAR(32) DEFAULT 'HIGH' COMMENT '风险等级:LOW/MEDIUM/HIGH',
+    `expire_time` DATETIME DEFAULT NULL COMMENT '过期时间,为空表示永久',
+    `created_by` VARCHAR(64) DEFAULT NULL COMMENT '创建人',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记:0-未删除,1-已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_target_type_value` (`target_type`, `target_value`),
+    KEY `idx_expire_time` (`expire_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='反欺诈黑名单表';
+
+-- =============================================
+-- 反欺诈高风险IP池表
+-- =============================================
+DROP TABLE IF EXISTS `fraud_risk_ip_pool`;
+CREATE TABLE `fraud_risk_ip_pool` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `ip_address` VARCHAR(64) DEFAULT NULL COMMENT 'IP地址',
+    `ip_segment` VARCHAR(64) DEFAULT NULL COMMENT 'IP段(如10.0.0.)',
+    `proxy_type` VARCHAR(32) DEFAULT NULL COMMENT '代理类型:HTTP/SOCKS/VPN/TOR/DATA_CENTER',
+    `source` VARCHAR(64) DEFAULT NULL COMMENT '来源',
+    `risk_level` VARCHAR(32) DEFAULT 'HIGH' COMMENT '风险等级',
+    `expire_time` DATETIME DEFAULT NULL COMMENT '过期时间',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记',
+    PRIMARY KEY (`id`),
+    KEY `idx_ip_address` (`ip_address`),
+    KEY `idx_ip_segment` (`ip_segment`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='反欺诈高风险IP池表';
+
+-- =============================================
+-- 反欺诈设备指纹关联表
+-- =============================================
+DROP TABLE IF EXISTS `fraud_device_fingerprint`;
+CREATE TABLE `fraud_device_fingerprint` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `device_id` VARCHAR(128) NOT NULL COMMENT '设备ID(指纹)',
+    `id_card` VARCHAR(18) DEFAULT NULL COMMENT '关联身份证号',
+    `phone` VARCHAR(20) DEFAULT NULL COMMENT '关联手机号',
+    `customer_id` VARCHAR(64) DEFAULT NULL COMMENT '关联客户ID',
+    `ip_address` VARCHAR(64) DEFAULT NULL COMMENT 'IP地址',
+    `app_version` VARCHAR(32) DEFAULT NULL COMMENT 'APP版本',
+    `os_type` VARCHAR(32) DEFAULT NULL COMMENT '操作系统类型',
+    `first_seen_time` DATETIME DEFAULT NULL COMMENT '首次出现时间',
+    `last_seen_time` DATETIME DEFAULT NULL COMMENT '最后出现时间',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记',
+    PRIMARY KEY (`id`),
+    KEY `idx_device_id` (`device_id`),
+    KEY `idx_id_card` (`id_card`),
+    KEY `idx_last_seen_time` (`last_seen_time`),
+    KEY `idx_device_id_card_time` (`device_id`, `id_card`, `last_seen_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='反欺诈设备指纹关联表';
+
+-- =============================================
+-- 反欺诈多头借贷记录表
+-- =============================================
+DROP TABLE IF EXISTS `fraud_multi_head_lending`;
+CREATE TABLE `fraud_multi_head_lending` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `id_card` VARCHAR(18) NOT NULL COMMENT '身份证号',
+    `institution_code` VARCHAR(64) NOT NULL COMMENT '机构编码',
+    `institution_name` VARCHAR(128) DEFAULT NULL COMMENT '机构名称',
+    `query_type` VARCHAR(32) DEFAULT 'LOAN_APPLY' COMMENT '查询类型:LOAN_APPLY-贷款申请,CREDIT_QUERY-征信查询',
+    `query_time` DATETIME NOT NULL COMMENT '查询时间',
+    `source` VARCHAR(64) DEFAULT NULL COMMENT '数据来源',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记',
+    PRIMARY KEY (`id`),
+    KEY `idx_id_card` (`id_card`),
+    KEY `idx_institution` (`id_card`, `institution_code`),
+    KEY `idx_query_time` (`query_time`),
+    KEY `idx_id_card_time` (`id_card`, `query_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='反欺诈多头借贷记录表';

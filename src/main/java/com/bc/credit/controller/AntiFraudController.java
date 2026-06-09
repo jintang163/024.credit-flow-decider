@@ -10,7 +10,6 @@ import com.bc.credit.entity.LoanApplication;
 import com.bc.credit.mapper.AntiFraudResultMapper;
 import com.bc.credit.mapper.AntiFraudRuleMapper;
 import com.bc.credit.mapper.FraudRuleABTestMapper;
-import com.bc.credit.service.AntiFraudService;
 import com.bc.credit.service.impl.AntiFraudServiceImpl;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
@@ -20,7 +19,6 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -49,9 +47,6 @@ public class AntiFraudController {
 
     @Autowired
     private DroolsRuleEngine droolsRuleEngine;
-
-    @Value("${credit.anti-fraud.rule-engine:QL_EXPRESS}")
-    private String activeRuleEngine;
 
     @PostMapping("/check")
     @ApiOperation("执行反欺诈校验")
@@ -100,10 +95,10 @@ public class AntiFraudController {
             if (rule.getRuleCode() == null || rule.getRuleCode().isEmpty()) {
                 return Result.error("规则编码不能为空");
             }
-            if (rule.getRuleExpression() != null && !rule.getRuleExpression().isEmpty()) {
-                boolean valid = antiFraudServiceImpl.validateRuleExpression(rule.getRuleExpression());
+            if (rule.getDrlContent() != null && !rule.getDrlContent().isEmpty()) {
+                boolean valid = antiFraudServiceImpl.validateDrl(rule.getDrlContent());
                 if (!valid) {
-                    return Result.error("规则表达式语法错误");
+                    return Result.error("DRL语法校验失败");
                 }
             }
             rule.setCreatedTime(LocalDateTime.now());
@@ -125,10 +120,10 @@ public class AntiFraudController {
             if (existing == null) {
                 return Result.error(404, "规则不存在");
             }
-            if (rule.getRuleExpression() != null && !rule.getRuleExpression().isEmpty()) {
-                boolean valid = antiFraudServiceImpl.validateRuleExpression(rule.getRuleExpression());
+            if (rule.getDrlContent() != null && !rule.getDrlContent().isEmpty()) {
+                boolean valid = antiFraudServiceImpl.validateDrl(rule.getDrlContent());
                 if (!valid) {
-                    return Result.error("规则表达式语法错误");
+                    return Result.error("DRL语法校验失败");
                 }
             }
             rule.setId(id);
@@ -212,7 +207,6 @@ public class AntiFraudController {
             boolean valid = antiFraudServiceImpl.validateDrl(drlContent);
             Map<String, Object> result = new HashMap<>();
             result.put("valid", valid);
-            result.put("engineType", "DROOLS");
             return Result.success(result);
         } catch (Exception e) {
             Map<String, Object> result = new HashMap<>();
@@ -251,7 +245,7 @@ public class AntiFraudController {
     public Result<Map<String, Object>> getRuleGroupStatus() {
         try {
             Map<String, Object> status = antiFraudServiceImpl.getRuleGroupStatus();
-            status.put("activeEngine", activeRuleEngine);
+            status.put("engineType", "DROOLS");
             return Result.success(status);
         } catch (Exception e) {
             log.error("获取规则组状态失败", e);

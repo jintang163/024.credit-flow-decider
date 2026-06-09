@@ -9,41 +9,33 @@ import java.io.Serializable;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("anti_fraud_rule")
-public class AntiFraudRule implements Serializable {
+@TableName("fraud_device_fingerprint")
+public class FraudDeviceFingerprint implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
-    private String ruleCode;
+    private String deviceId;
 
-    private String ruleName;
+    private String idCard;
 
-    private String ruleDesc;
+    private String phone;
 
-    private String ruleType;
+    private String customerId;
 
-    private String ruleExpression;
+    private String ipAddress;
 
-    private String drlContent;
+    private String appVersion;
 
-    private String ruleVersion;
+    private String osType;
 
-    private Integer ruleScore;
+    private LocalDateTime firstSeenTime;
 
-    private String riskLevel;
-
-    private String action;
-
-    private Integer enabled;
-
-    private Integer sortOrder;
+    private LocalDateTime lastSeenTime;
 
     private LocalDateTime createdTime;
-
-    private LocalDateTime updatedTime;
 
     @TableLogic
     private Integer deleted;

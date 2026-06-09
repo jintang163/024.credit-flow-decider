@@ -27,7 +27,6 @@
         <fastjson.version>2.0.32</fastjson.version>
         <swagger.version>2.9.2</swagger.version>
         <knife4j.version>4.3.0</knife4j.version>
-        <qlexpress.version>3.2.0</qlexpress.version>
         <drools.version>8.44.2.Final</drools.version>
         <spring-cloud.version>2021.0.8</spring-cloud.version>
         <jjwt.version>0.9.1</jjwt.version>
@@ -110,13 +109,6 @@
             <groupId>commons-io</groupId>
             <artifactId>commons-io</artifactId>
             <version>2.11.0</version>
-        </dependency>
-
-        <!-- QLExpress 规则引擎 -->
-        <dependency>
-            <groupId>com.alibaba</groupId>
-            <artifactId>QLExpress</artifactId>
-            <version>${qlexpress.version}</version>
         </dependency>
 
         <!-- Drools 8 规则引擎 -->

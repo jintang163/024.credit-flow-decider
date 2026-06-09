@@ -122,9 +122,6 @@ credit:
       api-url: http://localhost:8084
       api-key: housing-fund-key-2024
   anti-fraud:
-    rule-engine: DROOLS
-    cache-rules: true
-    cache-expire-minutes: 30
     drools:
       enabled: true
       rule-packages: com.bc.credit.fraud
@@ -132,6 +129,12 @@ credit:
       reload-interval-ms: 300000
     ab-test:
       enabled: true
+    feature:
+      external-api:
+        enabled: false
+        base-url: http://localhost:8085/risk-api
+        api-key: risk-api-secret-key-2024
+        timeout-ms: 3000
   scoring:
     min-score: 300
     max-score: 900

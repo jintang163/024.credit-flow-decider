@@ -3,7 +3,6 @@ package com.bc.credit.engine.impl;
 import com.bc.credit.dto.AntiFraudRuleFact;
 import com.bc.credit.dto.RuleExecutionResultDTO;
 import com.bc.credit.dto.RuleHitDetailDTO;
-import com.bc.credit.engine.RuleEngine;
 import lombok.extern.slf4j.Slf4j;
 import org.kie.api.KieBase;
 import org.kie.api.event.rule.AfterMatchFiredEvent;
@@ -16,11 +15,10 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
-@Component("droolsRuleEngine")
-public class DroolsRuleEngine implements RuleEngine {
+@Component
+public class DroolsRuleEngine {
 
     @Autowired
     private DroolsKieContainerManager kieContainerManager;
@@ -30,26 +28,6 @@ public class DroolsRuleEngine implements RuleEngine {
 
     private static final String RULE_HIT_COUNT_KEY = "anti-fraud:rule:hit-count:";
     private static final String RULE_EXEC_COUNT_KEY = "anti-fraud:rule:exec-count:";
-
-    @Override
-    public Object execute(String expression, Map<String, Object> context) throws Exception {
-        throw new UnsupportedOperationException("Drools engine does not support expression-based execution. Use executeRules() instead.");
-    }
-
-    @Override
-    public Boolean executeBoolean(String expression, Map<String, Object> context) throws Exception {
-        throw new UnsupportedOperationException("Drools engine does not support expression-based execution. Use executeRules() instead.");
-    }
-
-    @Override
-    public <T> T execute(String expression, Map<String, Object> context, Class<T> resultType) throws Exception {
-        throw new UnsupportedOperationException("Drools engine does not support expression-based execution. Use executeRules() instead.");
-    }
-
-    @Override
-    public boolean validateExpression(String expression) {
-        return kieContainerManager.validateDrl(expression);
-    }
 
     public RuleExecutionResultDTO executeRules(AntiFraudRuleFact fact, String ruleGroup) {
         long startTime = System.currentTimeMillis();
@@ -114,6 +92,10 @@ public class DroolsRuleEngine implements RuleEngine {
                 kieSession.dispose();
             }
         }
+    }
+
+    public boolean validateDrl(String drlContent) {
+        return kieContainerManager.validateDrl(drlContent);
     }
 
     private RuleExecutionResultDTO buildResult(AntiFraudRuleFact fact, List<RuleHitDetailDTO> hitDetails,
