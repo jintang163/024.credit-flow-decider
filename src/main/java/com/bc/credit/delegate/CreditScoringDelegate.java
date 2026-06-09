@@ -68,14 +68,22 @@ public class CreditScoringDelegate implements JavaDelegate {
             variables.put(ProcessVariableConstants.SCORE_PASS, scoreDTO.getPass());
             variables.put(ProcessVariableConstants.DIMENSION_SCORES, scoreDTO.getDimensionScores());
             variables.put(ProcessVariableConstants.SCORE_RESULT_ID, scoreResult.getId());
+            variables.put(ProcessVariableConstants.DEFAULT_PROBABILITY, scoreDTO.getDefaultProbability());
+            variables.put(ProcessVariableConstants.SCORE_SEGMENT, scoreDTO.getScoreSegment());
+            variables.put(ProcessVariableConstants.ENGINE_TYPE, scoreDTO.getEngineType());
+            variables.put(ProcessVariableConstants.MODEL_VERSION, scoreDTO.getModelVersion());
+            if (scoreDTO.getShapValues() != null) {
+                variables.put(ProcessVariableConstants.SHAP_VALUES, scoreDTO.getShapValues());
+            }
 
             processContextService.updateProcessVariables(execution, variables);
 
             application.setCreditScore(scoreDTO.getTotalScore());
             loanApplicationMapper.updateById(application);
 
-            log.info("信用评分服务任务执行完成, applicationNo: {}, totalScore: {}, pass: {}",
-                    applicationNo, scoreDTO.getTotalScore(), scoreDTO.getPass());
+            log.info("信用评分服务任务执行完成, applicationNo: {}, totalScore: {}, segment: {}, defaultProb: {}, engine: {}",
+                    applicationNo, scoreDTO.getTotalScore(), scoreDTO.getScoreSegment(),
+                    scoreDTO.getDefaultProbability(), scoreDTO.getEngineType());
 
         } catch (Exception e) {
             log.error("信用评分服务任务执行失败, applicationId: {}", applicationId, e);

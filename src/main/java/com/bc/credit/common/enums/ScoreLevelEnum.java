@@ -5,7 +5,7 @@ import lombok.Getter;
 @Getter
 public enum ScoreLevelEnum {
 
-    A("A", "优秀", 800, 900),
+    A("A", "优秀", 800, 850),
     B("B", "良好", 700, 799),
     C("C", "一般", 600, 699),
     D("D", "较差", 500, 599),

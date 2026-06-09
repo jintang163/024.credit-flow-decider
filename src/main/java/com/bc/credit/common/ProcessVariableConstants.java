@@ -57,6 +57,7 @@ public class ProcessVariableConstants {
     public static final String CREDIT_CARD_COUNT = "creditCardCount";
     public static final String CREDIT_CARD_LIMIT = "creditCardLimit";
     public static final String CREDIT_QUERY_SUCCESS = "creditQuerySuccess";
+    public static final String REMAINING_LOAN_AMOUNT = "remainingLoanAmount";
 
     public static final String FRAUD_SCORE = "fraudScore";
     public static final String FRAUD_RISK_LEVEL = "fraudRiskLevel";
@@ -67,6 +68,17 @@ public class ProcessVariableConstants {
     public static final String FRAUD_ERROR = "fraudError";
     public static final String FRAUD_RESULT = "fraudResult";
     public static final String ANTI_FRAUD_RESULT_ID = "antiFraudResultId";
+
+    public static final String SCORE_LEVEL = "scoreLevel";
+    public static final String SCORE_PASS = "scorePass";
+    public static final String DIMENSION_SCORES = "dimensionScores";
+    public static final String SCORE_RESULT_ID = "scoreResultId";
+    public static final String SCORE_ERROR = "scoreError";
+    public static final String DEFAULT_PROBABILITY = "defaultProbability";
+    public static final String SHAP_VALUES = "shapValues";
+    public static final String SCORE_SEGMENT = "scoreSegment";
+    public static final String ENGINE_TYPE = "engineType";
+    public static final String MODEL_VERSION = "modelVersion";
 
     public static final String CREDIT_SCORING_RESULT = "creditScoringResult";
     public static final String RISK_LEVEL = "riskLevel";

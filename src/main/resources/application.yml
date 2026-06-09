@@ -136,10 +136,21 @@ credit:
         api-key: risk-api-secret-key-2024
         timeout-ms: 3000
   scoring:
+    engine: PMML
     min-score: 300
-    max-score: 900
+    max-score: 850
     pass-score: 600
     scorecard-version: V1.0
+    pmml:
+      model-path: models/
+      model-version: V1.0
+      auto-reload: false
+    python-service:
+      enabled: false
+      base-url: http://localhost:5000
+      api-key: scoring-service-secret-key-2024
+      timeout-ms: 5000
+      include-shap: true
   limit:
     min-amount: 1000
     max-amount: 500000

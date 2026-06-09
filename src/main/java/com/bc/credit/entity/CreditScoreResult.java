@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -30,6 +31,16 @@ public class CreditScoreResult implements Serializable {
     private String scoreLevel;
 
     private String dimensionScores;
+
+    private BigDecimal defaultProbability;
+
+    private String scoreSegment;
+
+    private String shapValues;
+
+    private String engineType;
+
+    private String modelVersion;
 
     private Integer pass;
 
