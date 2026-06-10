@@ -14,7 +14,19 @@ public class LimitCalcDTO implements Serializable {
 
     private BigDecimal incomeAmount;
 
+    private BigDecimal annualIncome;
+
+    private BigDecimal totalDebt;
+
     private BigDecimal debtRatio;
+
+    private Integer creditScore;
+
+    private String scoreSegment;
+
+    private Integer fraudScore;
+
+    private String riskLevel;
 
     private BigDecimal creditLimit;
 
@@ -25,6 +37,12 @@ public class LimitCalcDTO implements Serializable {
     private Map<String, Object> limitFactors;
 
     private Boolean needManualReview;
+
+    private Integer validityDays;
+
+    private String strategyCode;
+
+    private String strategyType;
 
     private String remark;
 }

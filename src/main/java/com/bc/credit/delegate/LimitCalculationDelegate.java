@@ -49,9 +49,12 @@ public class LimitCalculationDelegate implements JavaDelegate {
             BigDecimal monthlyIncome = (BigDecimal) execution.getVariable(ProcessVariableConstants.MONTHLY_INCOME);
             BigDecimal monthlyDebt = (BigDecimal) execution.getVariable(ProcessVariableConstants.MONTHLY_DEBT);
             BigDecimal remainingLoanAmount = (BigDecimal) execution.getVariable(ProcessVariableConstants.REMAINING_LOAN_AMOUNT);
+            Integer fraudScore = (Integer) execution.getVariable(ProcessVariableConstants.FRAUD_SCORE);
+            String scoreSegment = (String) execution.getVariable(ProcessVariableConstants.SCORE_SEGMENT);
 
             LimitCalcDTO calcDTO = limitCalculationService.calculateLimit(
-                    application, creditScore, riskLevel, monthlyIncome, monthlyDebt, remainingLoanAmount);
+                    application, creditScore, riskLevel, monthlyIncome, monthlyDebt,
+                    remainingLoanAmount, fraudScore, scoreSegment);
 
             LimitCalcResult calcResult = limitCalculationService.saveLimitResult(application, calcDTO);
 
@@ -62,6 +65,9 @@ public class LimitCalculationDelegate implements JavaDelegate {
             variables.put(ProcessVariableConstants.NEED_MANUAL_REVIEW, calcDTO.getNeedManualReview());
             variables.put(ProcessVariableConstants.LIMIT_FACTORS, calcDTO.getLimitFactors());
             variables.put(ProcessVariableConstants.LIMIT_CALC_RESULT_ID, calcResult.getId());
+            variables.put(ProcessVariableConstants.LIMIT_VALIDITY_DAYS, calcDTO.getValidityDays());
+            variables.put(ProcessVariableConstants.LIMIT_STRATEGY_CODE, calcDTO.getStrategyCode());
+            variables.put(ProcessVariableConstants.LIMIT_ENGINE_TYPE, calcDTO.getStrategyType());
 
             processContextService.updateProcessVariables(execution, variables);
 

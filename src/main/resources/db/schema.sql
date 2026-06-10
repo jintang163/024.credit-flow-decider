@@ -153,12 +153,21 @@ CREATE TABLE `limit_calc_result` (
     `application_no` VARCHAR(64) NOT NULL COMMENT '申请编号',
     `customer_id` VARCHAR(64) NOT NULL COMMENT '客户ID',
     `income_amount` DECIMAL(15,2) DEFAULT NULL COMMENT '月收入',
+    `annual_income` DECIMAL(15,2) DEFAULT NULL COMMENT '年收入',
+    `total_debt` DECIMAL(15,2) DEFAULT NULL COMMENT '总负债',
     `debt_ratio` DECIMAL(10,4) DEFAULT NULL COMMENT '负债比率',
+    `credit_score` INT DEFAULT NULL COMMENT '信用评分',
+    `score_segment` VARCHAR(32) DEFAULT NULL COMMENT '评分分段:PRIME-优质,STANDARD-普通,HIGH_RISK-高风险',
+    `fraud_score` INT DEFAULT NULL COMMENT '欺诈风险分',
+    `risk_level` VARCHAR(32) DEFAULT NULL COMMENT '风险等级:LOW-低,MEDIUM-中,HIGH-高',
     `credit_limit` DECIMAL(15,2) NOT NULL COMMENT '授信额度(元)',
     `max_available_limit` DECIMAL(15,2) DEFAULT NULL COMMENT '最大可用额度',
     `interest_rate` DECIMAL(10,4) NOT NULL COMMENT '年利率',
     `limit_factors` TEXT COMMENT '额度计算因子(JSON)',
     `need_manual_review` TINYINT NOT NULL DEFAULT 0 COMMENT '是否需要人工复核:0-否,1-是',
+    `strategy_code` VARCHAR(64) DEFAULT NULL COMMENT '策略编码',
+    `strategy_type` VARCHAR(32) DEFAULT 'GROOVY' COMMENT '策略类型:GROOVY-脚本,DROOLS-决策表,DEFAULT-默认',
+    `validity_days` INT DEFAULT 30 COMMENT '额度有效期(天)',
     `calc_time` DATETIME NOT NULL COMMENT '计算时间',
     `remark` VARCHAR(512) DEFAULT NULL COMMENT '备注',
     `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -166,7 +175,8 @@ CREATE TABLE `limit_calc_result` (
     PRIMARY KEY (`id`),
     KEY `idx_application_id` (`application_id`),
     KEY `idx_customer_id` (`customer_id`),
-    KEY `idx_credit_limit` (`credit_limit`)
+    KEY `idx_credit_limit` (`credit_limit`),
+    KEY `idx_strategy_code` (`strategy_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='额度计算结果表';
 
 -- 审批记录表
@@ -673,3 +683,87 @@ CREATE TABLE `fraud_multi_head_lending` (
     KEY `idx_query_time` (`query_time`),
     KEY `idx_id_card_time` (`id_card`, `query_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='反欺诈多头借贷记录表';
+
+-- =============================================
+-- 额度策略配置表
+-- =============================================
+DROP TABLE IF EXISTS `limit_strategy_config`;
+CREATE TABLE `limit_strategy_config` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `strategy_code` VARCHAR(64) NOT NULL COMMENT '策略编码',
+    `strategy_name` VARCHAR(128) NOT NULL COMMENT '策略名称',
+    `strategy_type` VARCHAR(32) NOT NULL DEFAULT 'GROOVY' COMMENT '策略类型:GROOVY-脚本引擎,DROOLS-决策表,DEFAULT-默认',
+    `income_multiplier_min` INT DEFAULT 3 COMMENT '年收入倍数下限',
+    `income_multiplier_max` INT DEFAULT 8 COMMENT '年收入倍数上限',
+    `score_coefficient_prime` DECIMAL(10,4) DEFAULT 1.0 COMMENT '优质评分系数',
+    `score_coefficient_standard` DECIMAL(10,4) DEFAULT 0.6 COMMENT '普通评分系数',
+    `score_coefficient_high_risk` DECIMAL(10,4) DEFAULT 0.2 COMMENT '高风险评分系数',
+    `fraud_score_threshold` INT DEFAULT 50 COMMENT '欺诈风险分阈值(超过则扣减)',
+    `fraud_deduction_ratio` DECIMAL(10,4) DEFAULT 0.5 COMMENT '欺诈扣减比率',
+    `debt_deduction_ratio` DECIMAL(10,4) DEFAULT 0.3 COMMENT '负债抵扣比率',
+    `min_amount` DECIMAL(15,2) DEFAULT 1000 COMMENT '最低准入额度',
+    `max_amount` DECIMAL(15,2) DEFAULT 500000 COMMENT '产品上限额度',
+    `validity_days` INT DEFAULT 30 COMMENT '额度有效期(天)',
+    `manual_review_threshold` DECIMAL(15,2) DEFAULT 200000 COMMENT '人工复核阈值',
+    `groovy_script` TEXT COMMENT 'Groovy脚本内容',
+    `drools_rule_group` VARCHAR(64) DEFAULT NULL COMMENT 'Drools规则组',
+    `enabled` TINYINT NOT NULL DEFAULT 1 COMMENT '是否启用:0-否,1-是',
+    `default_strategy` TINYINT NOT NULL DEFAULT 0 COMMENT '是否默认策略:0-否,1-是',
+    `version` VARCHAR(32) DEFAULT 'V1.0' COMMENT '策略版本',
+    `remark` VARCHAR(512) DEFAULT NULL COMMENT '备注',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记:0-未删除,1-已删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_strategy_code` (`strategy_code`),
+    KEY `idx_enabled` (`enabled`),
+    KEY `idx_default_strategy` (`default_strategy`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='额度策略配置表';
+
+-- =============================================
+-- 额度计算过程日志表
+-- =============================================
+DROP TABLE IF EXISTS `limit_calc_log`;
+CREATE TABLE `limit_calc_log` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `application_id` BIGINT NOT NULL COMMENT '申请ID',
+    `application_no` VARCHAR(64) NOT NULL COMMENT '申请编号',
+    `customer_id` VARCHAR(64) NOT NULL COMMENT '客户ID',
+    `strategy_code` VARCHAR(64) DEFAULT NULL COMMENT '策略编码',
+    `strategy_type` VARCHAR(32) DEFAULT NULL COMMENT '策略类型:GROOVY/DROOLS/DEFAULT/FALLBACK',
+    `strategy_version` VARCHAR(32) DEFAULT NULL COMMENT '策略版本',
+    `annual_income` DECIMAL(15,2) DEFAULT NULL COMMENT '年收入',
+    `total_debt` DECIMAL(15,2) DEFAULT NULL COMMENT '总负债',
+    `credit_score` INT DEFAULT NULL COMMENT '信用评分',
+    `score_segment` VARCHAR(32) DEFAULT NULL COMMENT '评分分段',
+    `fraud_score` INT DEFAULT NULL COMMENT '欺诈风险分',
+    `loan_amount` DECIMAL(15,2) DEFAULT NULL COMMENT '申请金额',
+    `income_multiplier` INT DEFAULT NULL COMMENT '年收入倍数',
+    `score_coefficient` DECIMAL(10,4) DEFAULT NULL COMMENT '评分系数',
+    `base_limit` DECIMAL(15,2) DEFAULT NULL COMMENT '基础额度',
+    `fraud_deduction_amount` DECIMAL(15,2) DEFAULT NULL COMMENT '欺诈扣减金额',
+    `debt_deduction_amount` DECIMAL(15,2) DEFAULT NULL COMMENT '负债抵扣金额',
+    `before_constraint_limit` DECIMAL(15,2) DEFAULT NULL COMMENT '约束前额度',
+    `final_limit` DECIMAL(15,2) DEFAULT NULL COMMENT '最终额度',
+    `validity_days` INT DEFAULT 30 COMMENT '额度有效期(天)',
+    `interest_rate` DECIMAL(10,4) DEFAULT NULL COMMENT '年利率',
+    `calc_steps` TEXT COMMENT '计算步骤明细(JSON)',
+    `engine_type` VARCHAR(32) DEFAULT NULL COMMENT '引擎类型',
+    `execution_time_ms` BIGINT DEFAULT NULL COMMENT '执行耗时(毫秒)',
+    `calc_time` DATETIME NOT NULL COMMENT '计算时间',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记:0-未删除,1-已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_application_id` (`application_id`),
+    KEY `idx_customer_id` (`customer_id`),
+    KEY `idx_strategy_code` (`strategy_code`),
+    KEY `idx_calc_time` (`calc_time`),
+    KEY `idx_engine_type` (`engine_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='额度计算过程日志表';
+
+-- =============================================
+-- 初始化额度策略配置
+-- =============================================
+INSERT INTO `limit_strategy_config` (`id`, `strategy_code`, `strategy_name`, `strategy_type`, `income_multiplier_min`, `income_multiplier_max`, `score_coefficient_prime`, `score_coefficient_standard`, `score_coefficient_high_risk`, `fraud_score_threshold`, `fraud_deduction_ratio`, `debt_deduction_ratio`, `min_amount`, `max_amount`, `validity_days`, `manual_review_threshold`, `groovy_script`, `enabled`, `default_strategy`, `version`, `remark`) VALUES
+(1, 'DEFAULT_GROOVY', '默认Groovy策略', 'GROOVY', 3, 8, 1.0, 0.6, 0.2, 50, 0.5, 0.3, 1000, 500000, 30, 200000, '// 额度计算 Groovy 脚本\nbaseLimit = annualIncome * incomeMultiplier * scoreCoefficient\nif (fraudScore != null && fraudScore > 50) {\n    fraudDeductionAmount = baseLimit * (1 - new BigDecimal(\"0.5\"))\n    baseLimit = baseLimit * new BigDecimal(\"0.5\")\n} else {\n    fraudDeductionAmount = BigDecimal.ZERO\n}\ndebtDeductionAmount = (totalDebt != null ? totalDebt : BigDecimal.ZERO) * new BigDecimal(\"0.3\")\nbeforeConstraintLimit = baseLimit - debtDeductionAmount\nif (beforeConstraintLimit < minAmount) {\n    finalLimit = minAmount\n} else if (beforeConstraintLimit > maxAmount) {\n    finalLimit = maxAmount\n} else {\n    finalLimit = beforeConstraintLimit\n}\nif (finalLimit > loanAmount) finalLimit = loanAmount\nfinalLimit = finalLimit.setScale(0, RoundingMode.DOWN)\ninterestRate = new BigDecimal(\"0.12\")\nif (creditScore >= 750) interestRate = interestRate - new BigDecimal(\"0.04\")\nelse if (creditScore >= 700) interestRate = interestRate - new BigDecimal(\"0.02\")\nelse if (creditScore >= 650) interestRate = interestRate\nelse if (creditScore >= 600) interestRate = interestRate + new BigDecimal(\"0.02\")\nelse interestRate = interestRate + new BigDecimal(\"0.04\")\nif (interestRate < new BigDecimal(\"0.06\")) interestRate = new BigDecimal(\"0.06\")\nif (interestRate > new BigDecimal(\"0.24\")) interestRate = new BigDecimal(\"0.24\")\ninterestRate = interestRate.setScale(4, RoundingMode.HALF_UP)\nneedManualReview = (finalLimit >= new BigDecimal(\"200000\")) || (creditScore < 500)\nremark = needManualReview ? \'额度超过20万或评分较低，需人工复核\' : \'额度计算完成，可自动审批\'', 1, 1, 'V1.0', '默认Groovy脚本额度计算策略'),
+(2, 'CONSERVATIVE_DROOLS', '保守Drools策略', 'DROOLS', 3, 5, 0.8, 0.5, 0.1, 40, 0.5, 0.3, 1000, 300000, 30, 150000, NULL, 1, 0, 'V1.0', '保守型Drools决策表策略，适用于高风险场景');

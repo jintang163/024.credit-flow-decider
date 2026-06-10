@@ -156,6 +156,12 @@ credit:
     max-amount: 500000
     manual-review-threshold: 200000
     high-risk-threshold: 500
+    default-engine: GROOVY
+    default-income-multiplier: 5
+    default-fraud-score-threshold: 50
+    default-fraud-deduction-ratio: 0.5
+    default-debt-deduction-ratio: 0.3
+    default-validity-days: 30
   auth:
     jwt-secret: credit-flow-decider-secret-key-2024
     jwt-expire-minutes: 720

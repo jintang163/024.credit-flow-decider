@@ -10,8 +10,8 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("limit_calc_result")
-public class LimitCalcResult implements Serializable {
+@TableName("limit_calc_log")
+public class LimitCalcLog implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
@@ -24,13 +24,15 @@ public class LimitCalcResult implements Serializable {
 
     private String customerId;
 
-    private BigDecimal incomeAmount;
+    private String strategyCode;
+
+    private String strategyType;
+
+    private String strategyVersion;
 
     private BigDecimal annualIncome;
 
     private BigDecimal totalDebt;
-
-    private BigDecimal debtRatio;
 
     private Integer creditScore;
 
@@ -38,27 +40,33 @@ public class LimitCalcResult implements Serializable {
 
     private Integer fraudScore;
 
-    private String riskLevel;
+    private BigDecimal loanAmount;
 
-    private BigDecimal creditLimit;
+    private Integer incomeMultiplier;
 
-    private BigDecimal maxAvailableLimit;
+    private BigDecimal scoreCoefficient;
 
-    private BigDecimal interestRate;
+    private BigDecimal baseLimit;
 
-    private String limitFactors;
+    private BigDecimal fraudDeductionAmount;
 
-    private Integer needManualReview;
+    private BigDecimal debtDeductionAmount;
 
-    private String strategyCode;
+    private BigDecimal beforeConstraintLimit;
 
-    private String strategyType;
+    private BigDecimal finalLimit;
 
     private Integer validityDays;
 
-    private LocalDateTime calcTime;
+    private BigDecimal interestRate;
 
-    private String remark;
+    private String calcSteps;
+
+    private String engineType;
+
+    private Long executionTimeMs;
+
+    private LocalDateTime calcTime;
 
     private LocalDateTime createdTime;
 

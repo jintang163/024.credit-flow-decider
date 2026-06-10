@@ -1,0 +1,130 @@
+package com.bc.credit.limit;
+
+import com.bc.credit.dto.LimitCalcContext;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
+rule "score_coefficient_prime"
+    no-loop
+    @ruleCode("LIMIT_001")
+    @ruleType("SCORE_COEFFICIENT")
+    when
+        $ctx : LimitCalcContext( scoreSegment == "PRIME" )
+    then
+        $ctx.setScoreCoefficient(new BigDecimal("1.0"));
+        modify($ctx);
+end
+
+rule "score_coefficient_standard"
+    no-loop
+    @ruleCode("LIMIT_002")
+    @ruleType("SCORE_COEFFICIENT")
+    when
+        $ctx : LimitCalcContext( scoreSegment == "STANDARD" )
+    then
+        $ctx.setScoreCoefficient(new BigDecimal("0.6"));
+        modify($ctx);
+end
+
+rule "score_coefficient_high_risk"
+    no-loop
+    @ruleCode("LIMIT_003")
+    @ruleType("SCORE_COEFFICIENT")
+    when
+        $ctx : LimitCalcContext( scoreSegment == "HIGH_RISK" )
+    then
+        $ctx.setScoreCoefficient(new BigDecimal("0.2"));
+        modify($ctx);
+end
+
+rule "base_limit_calculation"
+    no-loop
+    @ruleCode("LIMIT_010")
+    @ruleType("BASE_LIMIT")
+    when
+        $ctx : LimitCalcContext( annualIncome != null , incomeMultiplier != null , scoreCoefficient != null )
+    then
+        BigDecimal baseLimit = $ctx.getAnnualIncome().multiply($ctx.getIncomeMultiplier()).multiply($ctx.getScoreCoefficient());
+        $ctx.setBaseLimit(baseLimit);
+        modify($ctx);
+end
+
+rule "fraud_deduction_high"
+    no-loop
+    @ruleCode("LIMIT_020")
+    @ruleType("FRAUD_DEDUCTION")
+    when
+        $ctx : LimitCalcContext( fraudScore != null , fraudScore > 50 , baseLimit != null )
+    then
+        BigDecimal deduction = $ctx.getBaseLimit().multiply(new BigDecimal("0.5"));
+        $ctx.setFraudDeductionAmount(deduction);
+        BigDecimal afterFraud = $ctx.getBaseLimit().multiply(new BigDecimal("0.5"));
+        $ctx.setBaseLimit(afterFraud);
+        modify($ctx);
+end
+
+rule "fraud_deduction_pass"
+    no-loop
+    @ruleCode("LIMIT_021")
+    @ruleType("FRAUD_DEDUCTION")
+    when
+        $ctx : LimitCalcContext( fraudScore != null , fraudScore <= 50 , baseLimit != null )
+    then
+        $ctx.setFraudDeductionAmount(BigDecimal.ZERO);
+        modify($ctx);
+end
+
+rule "debt_deduction"
+    no-loop
+    @ruleCode("LIMIT_030")
+    @ruleType("DEBT_DEDUCTION")
+    when
+        $ctx : LimitCalcContext( baseLimit != null )
+    then
+        BigDecimal totalDebt = $ctx.getTotalDebt() != null ? $ctx.getTotalDebt() : BigDecimal.ZERO;
+        BigDecimal debtDeduction = totalDebt.multiply(new BigDecimal("0.3"));
+        $ctx.setDebtDeductionAmount(debtDeduction);
+        BigDecimal beforeConstraint = $ctx.getBaseLimit().subtract(debtDeduction);
+        if (beforeConstraint.compareTo(BigDecimal.ZERO) < 0) {
+            beforeConstraint = BigDecimal.ZERO;
+        }
+        $ctx.setBeforeConstraintLimit(beforeConstraint);
+        modify($ctx);
+end
+
+rule "final_limit_constraint"
+    no-loop
+    @ruleCode("LIMIT_040")
+    @ruleType("FINAL_LIMIT")
+    when
+        $ctx : LimitCalcContext( beforeConstraintLimit != null , minAmount != null , maxAmount != null , loanAmount != null )
+    then
+        BigDecimal finalLimit = $ctx.getBeforeConstraintLimit();
+        if (finalLimit.compareTo($ctx.getMinAmount()) < 0) {
+            finalLimit = $ctx.getMinAmount();
+        }
+        if (finalLimit.compareTo($ctx.getMaxAmount()) > 0) {
+            finalLimit = $ctx.getMaxAmount();
+        }
+        if (finalLimit.compareTo($ctx.getLoanAmount()) > 0) {
+            finalLimit = $ctx.getLoanAmount();
+        }
+        finalLimit = finalLimit.setScale(0, RoundingMode.DOWN);
+        $ctx.setFinalLimit(finalLimit);
+        $ctx.setValidityDays(30);
+        modify($ctx);
+end
+
+rule "manual_review_trigger"
+    no-loop
+    @ruleCode("LIMIT_050")
+    @ruleType("MANUAL_REVIEW")
+    when
+        $ctx : LimitCalcContext( finalLimit != null )
+    then
+        boolean needReview = $ctx.getFinalLimit().compareTo(new BigDecimal("200000")) >= 0
+                || ($ctx.getCreditScore() != null && $ctx.getCreditScore() < 500);
+        $ctx.setNeedManualReview(needReview);
+        $ctx.setRemark(needReview ? "额度超过20万或评分较低，需人工复核" : "额度计算完成，可自动审批");
+        modify($ctx);
+end

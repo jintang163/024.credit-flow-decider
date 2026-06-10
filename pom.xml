@@ -28,6 +28,7 @@
         <swagger.version>2.9.2</swagger.version>
         <knife4j.version>4.3.0</knife4j.version>
         <drools.version>8.44.2.Final</drools.version>
+        <groovy.version>3.0.19</groovy.version>
         <jpmml.version>1.6.5</jpmml.version>
         <grpc.version>1.58.0</grpc.version>
         <protobuf.version>3.24.0</protobuf.version>
@@ -134,6 +135,17 @@
             <groupId>org.drools</groupId>
             <artifactId>drools-decisiontables</artifactId>
             <version>${drools.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.codehaus.groovy</groupId>
+            <artifactId>groovy-jsr223</artifactId>
+            <version>${groovy.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.codehaus.groovy</groupId>
+            <artifactId>groovy-json</artifactId>
+            <version>${groovy.version}</version>
         </dependency>
 
         <!-- Spring Cloud Config 动态规则下发 -->

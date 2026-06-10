@@ -89,6 +89,9 @@ public class ProcessVariableConstants {
     public static final String INTEREST_RATE = "interestRate";
     public static final String LIMIT_AMOUNT = "limitAmount";
     public static final String LIMIT_CALC_SUCCESS = "limitCalcSuccess";
+    public static final String LIMIT_VALIDITY_DAYS = "limitValidityDays";
+    public static final String LIMIT_STRATEGY_CODE = "limitStrategyCode";
+    public static final String LIMIT_ENGINE_TYPE = "limitEngineType";
 
     public static final String MANUAL_REVIEW_RESULT = "manualReviewResult";
     public static final String MANUAL_REVIEW_OPINION = "manualReviewOpinion";
