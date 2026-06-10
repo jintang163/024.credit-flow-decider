@@ -7,6 +7,7 @@ import com.bc.credit.common.enums.RiskLevelEnum;
 import com.bc.credit.common.enums.ScoreLevelEnum;
 import com.bc.credit.dto.LimitCalcContext;
 import com.bc.credit.dto.LimitCalcDTO;
+import com.bc.credit.engine.impl.DroolsLimitEngine;
 import com.bc.credit.engine.impl.GroovyLimitEngine;
 import com.bc.credit.entity.LimitCalcLog;
 import com.bc.credit.entity.LimitCalcResult;
@@ -76,6 +77,9 @@ public class LimitCalculationServiceImpl implements LimitCalculationService {
 
     @Autowired
     private GroovyLimitEngine groovyLimitEngine;
+
+    @Autowired
+    private DroolsLimitEngine droolsLimitEngine;
 
     @Autowired(required = false)
     private StringRedisTemplate stringRedisTemplate;
@@ -182,6 +186,8 @@ public class LimitCalculationServiceImpl implements LimitCalculationService {
             context.setScoreCoefficient(resolveScoreCoefficient(scoreSegment, strategy));
             context.setFraudDeductionRatio(strategy.getFraudDeductionRatio());
             context.setDebtDeductionRatio(strategy.getDebtDeductionRatio());
+            context.setFraudScoreThreshold(strategy.getFraudScoreThreshold());
+            context.setManualReviewThreshold(strategy.getManualReviewThreshold());
             context.setMinAmount(strategy.getMinAmount());
             context.setMaxAmount(strategy.getMaxAmount());
             context.setValidityDays(strategy.getValidityDays());
@@ -190,6 +196,8 @@ public class LimitCalculationServiceImpl implements LimitCalculationService {
             context.setScoreCoefficient(resolveScoreCoefficient(scoreSegment, null));
             context.setFraudDeductionRatio(defaultFraudDeductionRatio);
             context.setDebtDeductionRatio(defaultDebtDeductionRatio);
+            context.setFraudScoreThreshold(defaultFraudScoreThreshold);
+            context.setManualReviewThreshold(manualReviewThreshold);
             context.setMinAmount(minAmount);
             context.setMaxAmount(maxAmount);
             context.setValidityDays(defaultValidityDays);
@@ -215,9 +223,13 @@ public class LimitCalculationServiceImpl implements LimitCalculationService {
     }
 
     private LimitCalcContext executeDroolsEngine(LimitCalcContext context, LimitStrategyConfig strategy) {
-        log.info("使用Drools引擎执行额度计算, customerId: {}, strategyCode: {}",
-                context.getCustomerId(), context.getStrategyCode());
-        return executeDefaultEngine(context);
+        String ruleGroup = "limit";
+        if (strategy != null && strategy.getDroolsRuleGroup() != null && !strategy.getDroolsRuleGroup().isEmpty()) {
+            ruleGroup = strategy.getDroolsRuleGroup();
+        }
+        log.info("使用Drools引擎执行额度计算, customerId: {}, strategyCode: {}, ruleGroup: {}",
+                context.getCustomerId(), context.getStrategyCode(), ruleGroup);
+        return droolsLimitEngine.execute(context, ruleGroup);
     }
 
     private LimitCalcContext executeDefaultEngine(LimitCalcContext context) {
@@ -228,17 +240,24 @@ public class LimitCalculationServiceImpl implements LimitCalculationService {
         BigDecimal baseLimit = annualIncome.multiply(incomeMultiplier).multiply(scoreCoefficient);
         context.setBaseLimit(baseLimit);
 
+        int fraudThreshold = context.getFraudScoreThreshold() != null
+                ? context.getFraudScoreThreshold() : defaultFraudScoreThreshold;
+        BigDecimal fraudRatio = context.getFraudDeductionRatio() != null
+                ? context.getFraudDeductionRatio() : defaultFraudDeductionRatio;
+
         BigDecimal afterFraudLimit = baseLimit;
-        if (context.getFraudScore() != null && context.getFraudScore() > defaultFraudScoreThreshold) {
-            BigDecimal fraudDeduction = baseLimit.multiply(BigDecimal.ONE.subtract(context.getFraudDeductionRatio()));
+        if (context.getFraudScore() != null && context.getFraudScore() > fraudThreshold) {
+            BigDecimal fraudDeduction = baseLimit.multiply(BigDecimal.ONE.subtract(fraudRatio));
             context.setFraudDeductionAmount(fraudDeduction);
-            afterFraudLimit = baseLimit.multiply(context.getFraudDeductionRatio());
+            afterFraudLimit = baseLimit.multiply(fraudRatio);
         } else {
             context.setFraudDeductionAmount(BigDecimal.ZERO);
         }
 
         BigDecimal totalDebt = context.getTotalDebt() != null ? context.getTotalDebt() : BigDecimal.ZERO;
-        BigDecimal debtDeduction = totalDebt.multiply(context.getDebtDeductionRatio());
+        BigDecimal debtRatio = context.getDebtDeductionRatio() != null
+                ? context.getDebtDeductionRatio() : defaultDebtDeductionRatio;
+        BigDecimal debtDeduction = totalDebt.multiply(debtRatio);
         context.setDebtDeductionAmount(debtDeduction);
 
         BigDecimal beforeConstraint = afterFraudLimit.subtract(debtDeduction);
@@ -258,7 +277,9 @@ public class LimitCalculationServiceImpl implements LimitCalculationService {
         BigDecimal interestRate = calculateInterestRate(context.getCreditScore(), context.getRiskLevel());
         context.setInterestRate(interestRate);
 
-        boolean needManualReview = finalLimit.compareTo(manualReviewThreshold) >= 0
+        BigDecimal mrt = context.getManualReviewThreshold() != null
+                ? context.getManualReviewThreshold() : manualReviewThreshold;
+        boolean needManualReview = finalLimit.compareTo(mrt) >= 0
                 || (context.getCreditScore() != null && context.getCreditScore() < highRiskThreshold)
                 || RiskLevelEnum.HIGH.getCode().equals(context.getRiskLevel());
         context.setNeedManualReview(needManualReview);
@@ -266,7 +287,7 @@ public class LimitCalculationServiceImpl implements LimitCalculationService {
         context.setValidityDays(context.getValidityDays() != null ? context.getValidityDays() : defaultValidityDays);
 
         if (needManualReview) {
-            context.setRemark("额度超过20万或评分较低，需人工复核");
+            context.setRemark("额度超过人工复核阈值或评分较低，需人工复核");
         } else {
             context.setRemark("额度计算完成，可自动审批");
         }

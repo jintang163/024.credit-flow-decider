@@ -26,11 +26,13 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class DroolsKieContainerManager {
 
-    private static final String KIE_JSON = "META-INF/kmodule.xml";
-    private static final String REDIS_RULE_PREFIX = "anti-fraud:drl:";
+    private static final String REDIS_RULE_PREFIX = "rule:drl:";
 
     @Value("${credit.anti-fraud.drools.rule-packages:com.bc.credit.fraud}")
-    private String rulePackages;
+    private String fraudRulePackages;
+
+    @Value("${credit.limit.drools.rule-packages:com.bc.credit.limit}")
+    private String limitRulePackages;
 
     @Value("${credit.anti-fraud.drools.scan-interval:30}")
     private int scanIntervalSeconds;
@@ -41,32 +43,54 @@ public class DroolsKieContainerManager {
     private final Map<String, KieContainer> kieContainerMap = new ConcurrentHashMap<>();
     private final Map<String, KieBase> kieBaseMap = new ConcurrentHashMap<>();
     private final Map<String, Long> kieBaseVersionMap = new ConcurrentHashMap<>();
+    private final Map<String, String> groupPackageMap = new ConcurrentHashMap<>();
 
     private KieServices kieServices;
 
     @PostConstruct
     public void init() {
         kieServices = KieServices.Factory.get();
-        loadAllRuleGroups();
-        log.info("DroolsKieContainerManager initialized, rule packages: {}", rulePackages);
+
+        loadRuleGroupFromFiles("default", fraudRulePackages);
+
+        loadRuleGroupFromRedis("A", fraudRulePackages);
+        loadRuleGroupFromRedis("B", fraudRulePackages);
+
+        loadRuleGroupFromFiles("limit", limitRulePackages);
+
+        log.info("DroolsKieContainerManager initialized, fraud packages: {}, limit packages: {}",
+                fraudRulePackages, limitRulePackages);
     }
 
     public synchronized void loadAllRuleGroups() {
-        loadRuleGroupFromFiles("default");
-        loadRuleGroupFromRedis("A");
-        loadRuleGroupFromRedis("B");
+        loadRuleGroupFromFiles("default", fraudRulePackages);
+        loadRuleGroupFromRedis("A", fraudRulePackages);
+        loadRuleGroupFromRedis("B", fraudRulePackages);
+        loadRuleGroupFromFiles("limit", limitRulePackages);
     }
 
-    public void loadRuleGroupFromFiles(String group) {
+    public void loadRuleGroupFromFiles(String group, String packages) {
+        loadRuleGroupFromFiles(group, packages, null);
+    }
+
+    public void loadRuleGroupFromFiles(String group, String packages, String overrideDrl) {
         try {
             KieFileSystem kieFileSystem = kieServices.newKieFileSystem();
-            String kmoduleXml = buildKmoduleXml(group);
+            String kmoduleXml = buildKmoduleXml(group, packages);
             kieFileSystem.writeKModuleXML(kmoduleXml);
 
-            String[] packages = rulePackages.split(",");
+            if (overrideDrl != null && !overrideDrl.isEmpty()) {
+                String path = "src/main/resources/rules/dynamic/" + group + "/override.drl";
+                kieFileSystem.write(path, overrideDrl);
+                groupPackageMap.put(group, packages);
+                buildKieContainer(group, kieFileSystem);
+                return;
+            }
+
+            String[] pkgArray = packages.split(",");
             int ruleIndex = 0;
-            for (String pkg : packages) {
-                String pkgPath = pkg.replace('.', '/');
+            for (String pkg : pkgArray) {
+                String pkgPath = pkg.trim().replace('.', '/');
                 String resourcePath = "rules/" + pkgPath + "/";
                 List<String> drlFiles = getResourcesInPath(resourcePath);
 
@@ -82,18 +106,19 @@ public class DroolsKieContainerManager {
             }
 
             if (ruleIndex == 0) {
-                String defaultRule = buildDefaultRule(group);
+                String defaultRule = buildDefaultRule(group, packages);
                 String path = "src/main/resources/rules/default/" + group + "_default.drl";
                 kieFileSystem.write(path, defaultRule);
             }
 
+            groupPackageMap.put(group, packages);
             buildKieContainer(group, kieFileSystem);
         } catch (Exception e) {
             log.error("Failed to load rule group from files: {}", group, e);
         }
     }
 
-    public void loadRuleGroupFromRedis(String group) {
+    public void loadRuleGroupFromRedis(String group, String packages) {
         if (stringRedisTemplate == null) {
             log.debug("Redis not available, skip loading rule group from Redis: {}", group);
             return;
@@ -107,7 +132,7 @@ public class DroolsKieContainerManager {
             }
 
             KieFileSystem kieFileSystem = kieServices.newKieFileSystem();
-            String kmoduleXml = buildKmoduleXml(group);
+            String kmoduleXml = buildKmoduleXml(group, packages);
             kieFileSystem.writeKModuleXML(kmoduleXml);
 
             for (String key : keys) {
@@ -119,6 +144,7 @@ public class DroolsKieContainerManager {
                 }
             }
 
+            groupPackageMap.put(group, packages);
             buildKieContainer(group, kieFileSystem);
             log.info("Loaded rule group from Redis: {}, rules count: {}", group, keys.size());
         } catch (Exception e) {
@@ -126,15 +152,16 @@ public class DroolsKieContainerManager {
         }
     }
 
-    public void loadRuleFromString(String group, String ruleName, String drlContent) {
+    public void loadRuleFromString(String group, String packages, String ruleName, String drlContent) {
         try {
             KieFileSystem kieFileSystem = kieServices.newKieFileSystem();
-            String kmoduleXml = buildKmoduleXml(group);
+            String kmoduleXml = buildKmoduleXml(group, packages);
             kieFileSystem.writeKModuleXML(kmoduleXml);
 
             String path = "src/main/resources/rules/dynamic/" + group + "/" + ruleName + ".drl";
             kieFileSystem.write(path, drlContent);
 
+            groupPackageMap.put(group, packages);
             buildKieContainer(group, kieFileSystem);
             log.info("Loaded dynamic rule: {} for group: {}", ruleName, group);
         } catch (Exception e) {
@@ -144,7 +171,7 @@ public class DroolsKieContainerManager {
     }
 
     private void buildKieContainer(String group, KieFileSystem kieFileSystem) {
-        ReleaseId releaseId = kieServices.newReleaseId("com.bc.credit", "fraud-rules-" + group, UUID.randomUUID().toString());
+        ReleaseId releaseId = kieServices.newReleaseId("com.bc.credit", "rules-" + group, UUID.randomUUID().toString());
         kieFileSystem.generateAndWritePomXML(releaseId);
 
         KieBuilder kieBuilder = kieServices.newKieBuilder(kieFileSystem);
@@ -180,10 +207,12 @@ public class DroolsKieContainerManager {
             oldContainer.dispose();
         }
 
+        String packages = groupPackageMap.getOrDefault(group, fraudRulePackages);
+
         if ("A".equals(group) || "B".equals(group)) {
-            loadRuleGroupFromRedis(group);
+            loadRuleGroupFromRedis(group, packages);
         } else {
-            loadRuleGroupFromFiles(group);
+            loadRuleGroupFromFiles(group, packages);
         }
     }
 
@@ -215,12 +244,16 @@ public class DroolsKieContainerManager {
     }
 
     public boolean validateDrl(String drlContent) {
+        return validateDrl(drlContent, fraudRulePackages);
+    }
+
+    public boolean validateDrl(String drlContent, String packages) {
         try {
             KieFileSystem kieFileSystem = kieServices.newKieFileSystem();
-            kieFileSystem.writeKModuleXML(buildKmoduleXml("validate"));
+            kieFileSystem.writeKModuleXML(buildKmoduleXml("validate", packages));
             kieFileSystem.write("src/main/resources/rules/validate/test.drl", drlContent);
 
-            ReleaseId releaseId = kieServices.newReleaseId("com.bc.credit", "fraud-validate", UUID.randomUUID().toString());
+            ReleaseId releaseId = kieServices.newReleaseId("com.bc.credit", "validate", UUID.randomUUID().toString());
             kieFileSystem.generateAndWritePomXML(releaseId);
 
             KieBuilder kieBuilder = kieServices.newKieBuilder(kieFileSystem);
@@ -239,6 +272,7 @@ public class DroolsKieContainerManager {
         for (Map.Entry<String, KieContainer> entry : kieContainerMap.entrySet()) {
             Map<String, Object> groupInfo = new HashMap<>();
             groupInfo.put("version", kieBaseVersionMap.get(entry.getKey()));
+            groupInfo.put("packages", groupPackageMap.get(entry.getKey()));
             KieBase kieBase = kieBaseMap.get(entry.getKey());
             if (kieBase != null) {
                 int ruleCount = 0;
@@ -252,17 +286,19 @@ public class DroolsKieContainerManager {
         return status;
     }
 
-    private String buildKmoduleXml(String group) {
+    private String buildKmoduleXml(String group, String packages) {
+        String packagesAttr = packages != null ? packages : "com.bc.credit.fraud";
         return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
                 "<kmodule xmlns=\"http://www.drools.org/xsd/kmodule\">\n" +
-                "  <kbase name=\"" + group + "KBase\" packages=\"com.bc.credit.fraud\" default=\"false\">\n" +
+                "  <kbase name=\"" + group + "KBase\" packages=\"" + packagesAttr + "\" default=\"false\">\n" +
                 "    <ksession name=\"" + group + "KSession\" default=\"false\"/>\n" +
                 "  </kbase>\n" +
                 "</kmodule>";
     }
 
-    private String buildDefaultRule(String group) {
-        return "package com.bc.credit.fraud\n\n" +
+    private String buildDefaultRule(String group, String packages) {
+        String pkg = packages != null ? packages.split(",")[0].trim() : "com.bc.credit.fraud";
+        return "package " + pkg + "\n\n" +
                 "rule \"default_pass_" + group + "\"\n" +
                 "  @ruleCode(\"DEFAULT_" + group + "\")\n" +
                 "  @ruleType(\"DEFAULT\")\n" +

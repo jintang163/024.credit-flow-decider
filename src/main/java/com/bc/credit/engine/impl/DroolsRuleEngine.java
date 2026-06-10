@@ -3,13 +3,13 @@ package com.bc.credit.engine.impl;
 import com.bc.credit.dto.AntiFraudRuleFact;
 import com.bc.credit.dto.RuleExecutionResultDTO;
 import com.bc.credit.dto.RuleHitDetailDTO;
+import com.bc.credit.engine.RuleEngineStatsHelper;
 import lombok.extern.slf4j.Slf4j;
 import org.kie.api.KieBase;
 import org.kie.api.event.rule.AfterMatchFiredEvent;
 import org.kie.api.event.rule.DefaultAgendaEventListener;
 import org.kie.api.runtime.KieSession;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -20,14 +20,13 @@ import java.util.List;
 @Component
 public class DroolsRuleEngine {
 
+    private static final String MODULE = "anti-fraud";
+
     @Autowired
     private DroolsKieContainerManager kieContainerManager;
 
-    @Autowired(required = false)
-    private StringRedisTemplate stringRedisTemplate;
-
-    private static final String RULE_HIT_COUNT_KEY = "anti-fraud:rule:hit-count:";
-    private static final String RULE_EXEC_COUNT_KEY = "anti-fraud:rule:exec-count:";
+    @Autowired
+    private RuleEngineStatsHelper statsHelper;
 
     public RuleExecutionResultDTO executeRules(AntiFraudRuleFact fact, String ruleGroup) {
         long startTime = System.currentTimeMillis();
@@ -67,7 +66,7 @@ public class DroolsRuleEngine {
                     );
                     hitDetails.add(detail);
 
-                    incrementRuleHitCount(ruleCode != null ? ruleCode : ruleName);
+                    statsHelper.recordHit(MODULE, ruleCode != null ? ruleCode : ruleName);
                     log.debug("Drools rule fired: {}, ruleCode: {}, score: {}", ruleName, ruleCode, score);
                 }
             });
@@ -75,9 +74,8 @@ public class DroolsRuleEngine {
             kieSession.insert(fact);
             int firedRules = kieSession.fireAllRules();
 
-            incrementRuleExecCount(group, firedRules);
-
             long elapsed = System.currentTimeMillis() - startTime;
+            statsHelper.recordExecution(MODULE, group, firedRules, elapsed);
 
             RuleExecutionResultDTO result = buildResult(fact, hitDetails, group, elapsed);
             log.info("Drools rule execution completed, group: {}, firedRules: {}, hitRules: {}, totalScore: {}, elapsed: {}ms",
@@ -85,6 +83,8 @@ public class DroolsRuleEngine {
 
             return result;
         } catch (Exception e) {
+            long elapsed = System.currentTimeMillis() - startTime;
+            statsHelper.recordExecution(MODULE, group, 0, elapsed);
             log.error("Drools rule execution failed, group: {}, customerId: {}", group, fact.getCustomerId(), e);
             throw new RuntimeException("Drools rule execution failed: " + e.getMessage(), e);
         } finally {
@@ -96,6 +96,14 @@ public class DroolsRuleEngine {
 
     public boolean validateDrl(String drlContent) {
         return kieContainerManager.validateDrl(drlContent);
+    }
+
+    public long getRuleHitCount(String ruleCode) {
+        return statsHelper.getHitCount(MODULE, ruleCode);
+    }
+
+    public long getRuleExecCount(String group) {
+        return statsHelper.getExecCount(MODULE, group);
     }
 
     private RuleExecutionResultDTO buildResult(AntiFraudRuleFact fact, List<RuleHitDetailDTO> hitDetails,
@@ -158,49 +166,5 @@ public class DroolsRuleEngine {
         }
 
         return result;
-    }
-
-    private void incrementRuleHitCount(String ruleCode) {
-        try {
-            if (stringRedisTemplate != null) {
-                stringRedisTemplate.opsForValue().increment(RULE_HIT_COUNT_KEY + ruleCode);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to increment rule hit count for: {}", ruleCode, e);
-        }
-    }
-
-    private void incrementRuleExecCount(String group, int firedCount) {
-        try {
-            if (stringRedisTemplate != null) {
-                stringRedisTemplate.opsForValue().increment(RULE_EXEC_COUNT_KEY + group, firedCount);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to increment rule exec count for group: {}", group, e);
-        }
-    }
-
-    public long getRuleHitCount(String ruleCode) {
-        try {
-            if (stringRedisTemplate != null) {
-                String count = stringRedisTemplate.opsForValue().get(RULE_HIT_COUNT_KEY + ruleCode);
-                return count != null ? Long.parseLong(count) : 0;
-            }
-        } catch (Exception e) {
-            log.warn("Failed to get rule hit count for: {}", ruleCode, e);
-        }
-        return 0;
-    }
-
-    public long getRuleExecCount(String group) {
-        try {
-            if (stringRedisTemplate != null) {
-                String count = stringRedisTemplate.opsForValue().get(RULE_EXEC_COUNT_KEY + group);
-                return count != null ? Long.parseLong(count) : 0;
-            }
-        } catch (Exception e) {
-            log.warn("Failed to get rule exec count for group: {}", group, e);
-        }
-        return 0;
     }
 }

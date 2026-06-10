@@ -162,6 +162,8 @@ credit:
     default-fraud-deduction-ratio: 0.5
     default-debt-deduction-ratio: 0.3
     default-validity-days: 30
+    drools:
+      rule-packages: com.bc.credit.limit
   auth:
     jwt-secret: credit-flow-decider-secret-key-2024
     jwt-expire-minutes: 720

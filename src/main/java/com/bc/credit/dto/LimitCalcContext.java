@@ -53,6 +53,10 @@ public class LimitCalcContext implements Serializable {
 
     private BigDecimal debtDeductionRatio;
 
+    private Integer fraudScoreThreshold;
+
+    private BigDecimal manualReviewThreshold;
+
     private BigDecimal debtDeductionAmount;
 
     private BigDecimal beforeConstraintLimit;
