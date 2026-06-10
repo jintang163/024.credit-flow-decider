@@ -54,21 +54,6 @@ rule "fraud_deduction_high"
     @ruleCode("LIMIT_020")
     @ruleType("FRAUD_DEDUCTION")
     when
-        $ctx : LimitCalcContext( fraudScore != null , fraudScore > 50 , baseLimit != null , fraudDeductionRatio != null )
-    then
-        BigDecimal fraudRatio = $ctx.getFraudDeductionRatio();
-        BigDecimal deduction = $ctx.getBaseLimit().multiply(BigDecimal.ONE.subtract(fraudRatio));
-        $ctx.setFraudDeductionAmount(deduction);
-        BigDecimal afterFraud = $ctx.getBaseLimit().multiply(fraudRatio);
-        $ctx.setBaseLimit(afterFraud);
-        modify($ctx);
-end
-
-rule "fraud_deduction_threshold_from_strategy"
-    no-loop
-    @ruleCode("LIMIT_022")
-    @ruleType("FRAUD_DEDUCTION")
-    when
         $ctx : LimitCalcContext( fraudScore != null , fraudScoreThreshold != null , fraudScore > $ctx.fraudScoreThreshold , baseLimit != null , fraudDeductionRatio != null )
     then
         BigDecimal fraudRatio = $ctx.getFraudDeductionRatio();
@@ -84,7 +69,7 @@ rule "fraud_deduction_pass"
     @ruleCode("LIMIT_021")
     @ruleType("FRAUD_DEDUCTION")
     when
-        $ctx : LimitCalcContext( fraudScore != null , fraudScore <= 50 , baseLimit != null )
+        $ctx : LimitCalcContext( fraudScore != null , fraudScoreThreshold != null , fraudScore <= $ctx.fraudScoreThreshold , baseLimit != null )
     then
         $ctx.setFraudDeductionAmount(BigDecimal.ZERO);
         modify($ctx);
