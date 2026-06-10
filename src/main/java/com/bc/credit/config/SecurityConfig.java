@@ -27,7 +27,7 @@ public class SecurityConfig {
             .authorizeRequests()
                 .antMatchers("/api/auth/login", "/api/auth/logout").permitAll()
                 .antMatchers("/doc.html", "/webjars/**", "/v2/api-docs", "/swagger-resources/**", "/favicon.ico").permitAll()
-                .antMatchers("/api/loan/**", "/api/approval/**", "/api/workflow/**", "/api/anti-fraud/**", "/api/scoring/**").permitAll()
+                .antMatchers("/api/loan/**", "/api/approval/**", "/api/workflow/**", "/api/anti-fraud/**", "/api/scoring/**", "/api/monitor/**", "/api/ops/**", "/api/application/**").permitAll()
                 .anyRequest().authenticated()
             .and()
             .httpBasic().disable();

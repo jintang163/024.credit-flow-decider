@@ -1,0 +1,91 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "信贷审批工作流监控",
+    "tags": ["credit-flow", "workflow"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "运行中流程实例数",
+        "type": "stat",
+        "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 },
+        "targets": [
+          { "expr": "credit_flow_process_instances_running", "legendFormat": "运行中", "refId": "A" }
+        ],
+        "fieldConfig": {
+          "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 80 }] } }
+        }
+      },
+      {
+        "id": 2,
+        "title": "已完成流程实例数",
+        "type": "stat",
+        "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 },
+        "targets": [
+          { "expr": "credit_flow_process_instances_completed", "legendFormat": "已完成", "refId": "A" }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "流程启动速率",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          { "expr": "rate(credit_flow_process_started_total[5m])", "legendFormat": "启动速率/s", "refId": "A" }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "征信查询耗时分布",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+        "targets": [
+          { "expr": "histogram_quantile(0.50, sum(rate(credit_flow_credit_query_duration_bucket[5m])) by (le))", "legendFormat": "P50", "refId": "A" },
+          { "expr": "histogram_quantile(0.90, sum(rate(credit_flow_credit_query_duration_bucket[5m])) by (le))", "legendFormat": "P90", "refId": "B" },
+          { "expr": "histogram_quantile(0.95, sum(rate(credit_flow_credit_query_duration_bucket[5m])) by (le))", "legendFormat": "P95", "refId": "C" },
+          { "expr": "histogram_quantile(0.99, sum(rate(credit_flow_credit_query_duration_bucket[5m])) by (le))", "legendFormat": "P99", "refId": "D" }
+        ],
+        "alert": {
+          "name": "征信耗时P95超过5s",
+          "conditions": [
+            { "type": "query", "query": { "params": ["C", "5m", "now"] }, "evaluator": { "params": [5000], "type": "gt" } }
+          ]
+        }
+      },
+      {
+        "id": 5,
+        "title": "运维操作频率",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+        "targets": [
+          { "expr": "rate(credit_flow_credit_query_retry_total[1h])", "legendFormat": "征信重试/h", "refId": "A" },
+          { "expr": "rate(credit_flow_ops_skip_node_total[1h])", "legendFormat": "跳过节点/h", "refId": "B" }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "JVM内存使用",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+        "targets": [
+          { "expr": "jvm_memory_used_bytes{application='credit-flow-decider', area='heap'}", "legendFormat": "Heap Used", "refId": "A" },
+          { "expr": "jvm_memory_max_bytes{application='credit-flow-decider', area='heap'}", "legendFormat": "Heap Max", "refId": "B" }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "HTTP请求QPS",
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+        "targets": [
+          { "expr": "rate(http_server_requests_seconds_count{application='credit-flow-decider'}[5m])", "legendFormat": "{{uri}}", "refId": "A" }
+        ]
+      }
+    ],
+    "refresh": "10s",
+    "schemaVersion": 27,
+    "version": 1
+  },
+  "overwrite": true
+}

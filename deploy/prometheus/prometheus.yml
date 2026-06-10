@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'credit-flow-decider'
+    metrics_path: '/credit-flow/actuator/prometheus'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['localhost:8080']
+        labels:
+          application: 'credit-flow-decider'
+          env: 'dev'

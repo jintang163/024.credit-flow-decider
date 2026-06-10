@@ -767,3 +767,33 @@ CREATE TABLE `limit_calc_log` (
 INSERT INTO `limit_strategy_config` (`id`, `strategy_code`, `strategy_name`, `strategy_type`, `income_multiplier_min`, `income_multiplier_max`, `score_coefficient_prime`, `score_coefficient_standard`, `score_coefficient_high_risk`, `fraud_score_threshold`, `fraud_deduction_ratio`, `debt_deduction_ratio`, `min_amount`, `max_amount`, `validity_days`, `manual_review_threshold`, `groovy_script`, `enabled`, `default_strategy`, `version`, `remark`) VALUES
 (1, 'DEFAULT_GROOVY', '默认Groovy策略', 'GROOVY', 3, 8, 1.0, 0.6, 0.2, 50, 0.5, 0.3, 1000, 500000, 30, 200000, '// 额度计算 Groovy 脚本 (策略参数从绑定变量读取)\nbaseLimit = annualIncome * incomeMultiplier * scoreCoefficient\nint threshold = fraudScoreThreshold != null ? fraudScoreThreshold : 50\nBigDecimal fRatio = fraudDeductionRatio != null ? fraudDeductionRatio : new BigDecimal(\"0.5\")\nif (fraudScore != null && fraudScore > threshold) {\n    fraudDeductionAmount = baseLimit * (BigDecimal.ONE - fRatio)\n    baseLimit = baseLimit * fRatio\n} else {\n    fraudDeductionAmount = BigDecimal.ZERO\n}\nBigDecimal dRatio = debtDeductionRatio != null ? debtDeductionRatio : new BigDecimal(\"0.3\")\ndebtDeductionAmount = (totalDebt != null ? totalDebt : BigDecimal.ZERO) * dRatio\nbeforeConstraintLimit = baseLimit - debtDeductionAmount\nif (beforeConstraintLimit < minAmount) {\n    finalLimit = minAmount\n} else if (beforeConstraintLimit > maxAmount) {\n    finalLimit = maxAmount\n} else {\n    finalLimit = beforeConstraintLimit\n}\nif (finalLimit > loanAmount) finalLimit = loanAmount\nfinalLimit = finalLimit.setScale(0, RoundingMode.DOWN)\ninterestRate = new BigDecimal(\"0.12\")\nif (creditScore >= 750) interestRate -= new BigDecimal(\"0.04\")\nelse if (creditScore >= 700) interestRate -= new BigDecimal(\"0.02\")\nelse if (creditScore >= 650) interestRate = interestRate\nelse if (creditScore >= 600) interestRate += new BigDecimal(\"0.02\")\nelse interestRate += new BigDecimal(\"0.04\")\nif (interestRate < new BigDecimal(\"0.06\")) interestRate = new BigDecimal(\"0.06\")\nif (interestRate > new BigDecimal(\"0.24\")) interestRate = new BigDecimal(\"0.24\")\ninterestRate = interestRate.setScale(4, RoundingMode.HALF_UP)\nBigDecimal mrt = manualReviewThreshold != null ? manualReviewThreshold : new BigDecimal(\"200000\")\nneedManualReview = (finalLimit >= mrt) || (creditScore != null && creditScore < 500)\nremark = needManualReview ? \'额度超过人工复核阈值或评分较低，需人工复核\' : \'额度计算完成，可自动审批\'', 1, 1, 'V1.0', '默认Groovy脚本额度计算策略'),
 (2, 'CONSERVATIVE_DROOLS', '保守Drools策略', 'DROOLS', 3, 5, 0.8, 0.5, 0.1, 40, 0.5, 0.3, 1000, 300000, 30, 150000, NULL, 1, 0, 'V1.0', '保守型Drools决策表策略，适用于高风险场景');
+
+-- =============================================
+-- 审计日志表
+-- =============================================
+DROP TABLE IF EXISTS `sys_audit_log`;
+CREATE TABLE `sys_audit_log` (
+    `id` BIGINT NOT NULL COMMENT '主键ID',
+    `operation_type` VARCHAR(64) NOT NULL COMMENT '操作类型:RETRY_CREDIT-重试征信,SKIP_NODE-跳过节点,MODIFY_RULE_TEST-修改规则测试,DEPLOY-部署,SUSPEND-挂起,ACTIVATE-激活,TERMINATE-终止',
+    `operation_module` VARCHAR(64) NOT NULL COMMENT '操作模块:MONITOR-监控,WORKFLOW-流程,APPROVAL-审批',
+    `operation_desc` VARCHAR(256) DEFAULT NULL COMMENT '操作描述',
+    `operator` VARCHAR(64) DEFAULT NULL COMMENT '操作人',
+    `target_id` VARCHAR(128) DEFAULT NULL COMMENT '目标ID',
+    `target_type` VARCHAR(64) DEFAULT NULL COMMENT '目标类型:PROCESS_INSTANCE-流程实例,TASK-任务,RULE-规则',
+    `request_params` TEXT COMMENT '请求参数(JSON)',
+    `response_result` TEXT COMMENT '响应结果(JSON)',
+    `client_ip` VARCHAR(64) DEFAULT NULL COMMENT '客户端IP',
+    `success` TINYINT NOT NULL DEFAULT 1 COMMENT '是否成功:0-否,1-是',
+    `error_msg` VARCHAR(512) DEFAULT NULL COMMENT '错误信息',
+    `cost_ms` BIGINT DEFAULT NULL COMMENT '耗时(毫秒)',
+    `operation_time` DATETIME NOT NULL COMMENT '操作时间',
+    `created_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '删除标记:0-未删除,1-已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_operation_type` (`operation_type`),
+    KEY `idx_operation_module` (`operation_module`),
+    KEY `idx_operator` (`operator`),
+    KEY `idx_target_id` (`target_id`),
+    KEY `idx_success` (`success`),
+    KEY `idx_operation_time` (`operation_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='审计日志表';
