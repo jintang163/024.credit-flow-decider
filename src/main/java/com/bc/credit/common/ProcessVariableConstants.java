@@ -185,6 +185,9 @@ public class ProcessVariableConstants {
     public static final String SIGNAL_CREDIT_QUERY_DONE = "signalCreditQueryDone";
     public static final String SIGNAL_SCORING_DONE = "signalScoringDone";
 
+    public static final String RECEIVE_TASK_ID_CREDIT_QUERY = "receive_credit_query";
+    public static final String RECEIVE_TASK_ID_SCORING = "receive_scoring";
+
     public static final String COMPENSATION_TRIGGERED = "compensationTriggered";
     public static final String COMPENSATION_COUNT = "compensationCount";
     public static final String LAST_COMPENSATION_TIME = "lastCompensationTime";

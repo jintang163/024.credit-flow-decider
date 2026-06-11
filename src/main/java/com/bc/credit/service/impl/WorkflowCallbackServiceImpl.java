@@ -70,20 +70,31 @@ public class WorkflowCallbackServiceImpl implements WorkflowCallbackService {
         boolean triggered = false;
 
         try {
-            if (request.getSignalName() != null && !request.getSignalName().isEmpty()) {
+            if (request.getReceiveTaskId() != null && !request.getReceiveTaskId().isEmpty()) {
+                triggered = triggerReceiveTask(processInstanceId, request.getReceiveTaskId(), variables);
+                if (!triggered && request.getSignalName() != null && !request.getSignalName().isEmpty()) {
+                    triggered = signalProcessInstance(processInstanceId, request.getSignalName(), variables);
+                }
+                if (!triggered && request.getMessageName() != null && !request.getMessageName().isEmpty()) {
+                    triggered = messageEventReceived(processInstanceId, request.getMessageName(), variables);
+                }
+            } else if (request.getSignalName() != null && !request.getSignalName().isEmpty()) {
                 triggered = signalProcessInstance(processInstanceId, request.getSignalName(), variables);
+                if (!triggered && request.getMessageName() != null && !request.getMessageName().isEmpty()) {
+                    triggered = messageEventReceived(processInstanceId, request.getMessageName(), variables);
+                }
             } else if (request.getMessageName() != null && !request.getMessageName().isEmpty()) {
                 triggered = messageEventReceived(processInstanceId, request.getMessageName(), variables);
-            } else if (request.getReceiveTaskId() != null && !request.getReceiveTaskId().isEmpty()) {
-                triggered = triggerReceiveTask(processInstanceId, request.getReceiveTaskId(), variables);
-            } else {
-                setProcessVariables(processInstanceId, variables);
-                triggered = true;
             }
 
-            if (triggered) {
-                log.info("[流程回调] 回调成功, processInstanceId: {}, taskType: {}",
-                        processInstanceId, request.getTaskType());
+            if (!triggered) {
+                log.warn("[流程回调] 三种触发方式均未生效，仅设置变量, processInstanceId: {}", processInstanceId);
+                setProcessVariables(processInstanceId, variables);
+            }
+
+            if (request.isSuccess()) {
+                log.info("[流程回调] 回调成功, processInstanceId: {}, taskType: {}, triggered: {}",
+                        processInstanceId, request.getTaskType(), triggered);
 
                 if (request.getTaskId() != null) {
                     Map<String, Object> cbVars = new HashMap<>(variables);
@@ -96,7 +107,7 @@ public class WorkflowCallbackServiceImpl implements WorkflowCallbackService {
                 }
             }
 
-            return triggered;
+            return true;
 
         } catch (Exception e) {
             log.error("[流程回调] 回调异常, processInstanceId: {}", processInstanceId, e);
@@ -122,16 +133,7 @@ public class WorkflowCallbackServiceImpl implements WorkflowCallbackService {
         if (executions == null || executions.isEmpty()) {
             log.warn("[流程回调] 未找到signal订阅, processInstanceId: {}, signal: {}",
                     processInstanceId, signalName);
-
-            List<Execution> allExecutions = runtimeService.createExecutionQuery()
-                    .processInstanceId(processInstanceId)
-                    .list();
-            log.debug("[流程回调] 当前所有执行节点数: {}", allExecutions.size());
-
-            if (variables != null && !variables.isEmpty()) {
-                setProcessVariables(processInstanceId, variables);
-            }
-            return true;
+            return false;
         }
 
         for (Execution execution : executions) {
@@ -161,10 +163,7 @@ public class WorkflowCallbackServiceImpl implements WorkflowCallbackService {
         if (executions == null || executions.isEmpty()) {
             log.warn("[流程回调] 未找到message订阅, processInstanceId: {}, message: {}",
                     processInstanceId, messageName);
-            if (variables != null && !variables.isEmpty()) {
-                setProcessVariables(processInstanceId, variables);
-            }
-            return true;
+            return false;
         }
 
         for (Execution execution : executions) {
@@ -194,10 +193,7 @@ public class WorkflowCallbackServiceImpl implements WorkflowCallbackService {
         if (executions == null || executions.isEmpty()) {
             log.warn("[流程回调] 未找到ReceiveTask, processInstanceId: {}, activityId: {}",
                     processInstanceId, receiveTaskId);
-            if (variables != null && !variables.isEmpty()) {
-                setProcessVariables(processInstanceId, variables);
-            }
-            return true;
+            return false;
         }
 
         for (Execution execution : executions) {
@@ -322,23 +318,77 @@ public class WorkflowCallbackServiceImpl implements WorkflowCallbackService {
                 ApplicationStatusEnum.MANUAL_REVIEW.getCode());
         vars.put(ProcessVariableConstants.APPLICATION_STATUS_DESC,
                 ApplicationStatusEnum.MANUAL_REVIEW.getDesc());
-        setProcessVariables(processInstanceId, vars);
+
+        if (ProcessVariableConstants.TASK_TYPE_CREDIT_QUERY.equals(taskType)) {
+            vars.put(ProcessVariableConstants.CREDIT_QUERY_ASYNC_STATUS,
+                    ProcessVariableConstants.ASYNC_STATUS_MANUAL_REVIEW);
+            vars.put(ProcessVariableConstants.CREDIT_QUERY_SUCCESS, false);
+            vars.put(ProcessVariableConstants.CREDIT_QUERY_CALLBACK_STATUS,
+                    ProcessVariableConstants.CALLBACK_STATUS_FAILED);
+            vars.put(ProcessVariableConstants.CREDIT_QUERY_ERROR, reason);
+        } else if (ProcessVariableConstants.TASK_TYPE_SCORING.equals(taskType)) {
+            vars.put(ProcessVariableConstants.SCORING_ASYNC_STATUS,
+                    ProcessVariableConstants.ASYNC_STATUS_MANUAL_REVIEW);
+            vars.put(ProcessVariableConstants.SCORE_PASS, false);
+            vars.put(ProcessVariableConstants.SCORING_CALLBACK_STATUS,
+                    ProcessVariableConstants.CALLBACK_STATUS_FAILED);
+            vars.put(ProcessVariableConstants.SCORING_ERROR, reason);
+        }
+
+        boolean triggerEscaped = escapeFromReceiveTask(processInstanceId, vars);
+        log.info("[流程补偿] 从ReceiveTask脱离结果: {}, processInstanceId: {}", triggerEscaped, processInstanceId);
+
+        if (!triggerEscaped) {
+            setProcessVariables(processInstanceId, vars);
+        }
 
         List<Task> userTasks = taskService.createTaskQuery()
                 .processInstanceId(processInstanceId)
                 .taskDefinitionKey("manual_review_task")
                 .list();
-        log.info("[流程补偿] 当前人工复核任务数: {}", userTasks.size());
+        log.info("[流程补偿] 当前人工复核任务数: {}, processInstanceId: {}", userTasks.size(), processInstanceId);
 
         return true;
+    }
+
+    private boolean escapeFromReceiveTask(String processInstanceId, Map<String, Object> variables) {
+        String[] receiveTaskIds = {
+                ProcessVariableConstants.RECEIVE_TASK_ID_CREDIT_QUERY,
+                ProcessVariableConstants.RECEIVE_TASK_ID_SCORING
+        };
+
+        boolean anyTriggered = false;
+        for (String receiveTaskId : receiveTaskIds) {
+            List<Execution> executions = runtimeService.createExecutionQuery()
+                    .processInstanceId(processInstanceId)
+                    .activityId(receiveTaskId)
+                    .list();
+
+            if (executions != null && !executions.isEmpty()) {
+                for (Execution execution : executions) {
+                    try {
+                        log.info("[流程补偿-脱离] 从ReceiveTask脱离, activityId: {}, executionId: {}",
+                                receiveTaskId, execution.getId());
+                        runtimeService.trigger(execution.getId(), variables);
+                        anyTriggered = true;
+                    } catch (Exception e) {
+                        log.warn("[流程补偿-脱离] trigger失败, activityId: {}, executionId: {}",
+                                receiveTaskId, execution.getId(), e);
+                    }
+                }
+            }
+        }
+
+        return anyTriggered;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean transferToManualReview(WorkflowCallbackRequest request) {
         log.info("[流程回调-转人工] 基于WorkflowCallbackRequest转人工, " +
-                        "processInstanceId: {}, taskType: {}, success: {}",
-                request.getProcessInstanceId(), request.getTaskType(), request.isSuccess());
+                        "processInstanceId: {}, taskType: {}, success: {}, receiveTaskId: {}",
+                request.getProcessInstanceId(), request.getTaskType(), request.isSuccess(),
+                request.getReceiveTaskId());
 
         String processInstanceId = request.getProcessInstanceId();
         if (!isProcessActive(processInstanceId)) {
@@ -346,12 +396,32 @@ public class WorkflowCallbackServiceImpl implements WorkflowCallbackService {
             return false;
         }
 
+        Map<String, Object> mergedVars = new HashMap<>();
         if (request.getVariables() != null && !request.getVariables().isEmpty()) {
+            mergedVars.putAll(request.getVariables());
+        }
+
+        mergedVars.putIfAbsent(ProcessVariableConstants.NEED_MANUAL_REVIEW, true);
+        if (request.getErrorMsg() != null) {
+            mergedVars.putIfAbsent(ProcessVariableConstants.MANUAL_REVIEW_REASON, request.getErrorMsg());
+        }
+
+        if (request.getReceiveTaskId() != null && !request.getReceiveTaskId().isEmpty()) {
             try {
-                setProcessVariables(processInstanceId, request.getVariables());
+                List<Execution> executions = runtimeService.createExecutionQuery()
+                        .processInstanceId(processInstanceId)
+                        .activityId(request.getReceiveTaskId())
+                        .list();
+                if (executions != null && !executions.isEmpty()) {
+                    for (Execution execution : executions) {
+                        log.info("[流程回调-转人工] 直接脱离receiveTask: {}, executionId: {}",
+                                request.getReceiveTaskId(), execution.getId());
+                        runtimeService.trigger(execution.getId(), mergedVars);
+                    }
+                }
             } catch (Exception e) {
-                log.warn("[流程回调-转人工] 设置流程变量失败，继续转人工流程, processInstanceId: {}",
-                        processInstanceId, e);
+                log.warn("[流程回调-转人工] 直接脱离receiveTask失败, receiveTaskId: {}",
+                        request.getReceiveTaskId(), e);
             }
         }
 
