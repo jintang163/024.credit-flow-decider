@@ -12,7 +12,9 @@ public enum ApplicationStatusEnum {
     WITHDRAWN(4, "已撤回"),
     SUPPLEMENTING(5, "补充资料中"),
     REVIEWING(6, "复核中"),
-    RETURNED(7, "已退回");
+    RETURNED(7, "已退回"),
+    MANUAL_REVIEW(8, "人工复核中"),
+    ASYNC_PROCESSING(9, "异步处理中");
 
     private final Integer code;
     private final String desc;

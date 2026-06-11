@@ -10,7 +10,10 @@
              targetNamespace="http://www.bc.com/credit/process"
              id="Definitions_1">
 
-    <process id="credit_approval_process" name="贷款审批流程" isExecutable="true" flowable:versionTag="2.0.0">
+    <signal id="signalCreditQueryDone" name="signalCreditQueryDone" flowable:scope="global"/>
+    <signal id="signalScoringDone" name="signalScoringDone" flowable:scope="global"/>
+
+    <process id="credit_approval_process" name="贷款审批流程" isExecutable="true" flowable:versionTag="3.0.0">
 
         <startEvent id="start_application" name="提交申请">
             <outgoing>Flow_to_parallel_fork</outgoing>
@@ -24,38 +27,103 @@
 
         <sequenceFlow id="Flow_to_parallel_fork" sourceRef="start_application" targetRef="parallel_fork_gateway"/>
 
-        <serviceTask id="credit_query_task" name="征信查询"
+        <serviceTask id="credit_query_task" name="征信查询-发送MQ"
                      flowable:delegateExpression="${creditQueryDelegate}"
-                     flowable:async="false">
+                     flowable:async="true">
             <incoming>Flow_to_credit_query</incoming>
-            <outgoing>Flow_to_parallel_join</outgoing>
+            <outgoing>Flow_to_receive_credit_query</outgoing>
         </serviceTask>
 
         <sequenceFlow id="Flow_to_credit_query" sourceRef="parallel_fork_gateway" targetRef="credit_query_task"/>
+
+        <receiveTask id="receive_credit_query" name="征信查询-等待回调">
+            <incoming>Flow_to_receive_credit_query</incoming>
+            <outgoing>Flow_to_parallel_join_credit</outgoing>
+        </receiveTask>
+
+        <sequenceFlow id="Flow_to_receive_credit_query"
+                      sourceRef="credit_query_task" targetRef="receive_credit_query"/>
+
+        <boundaryEvent id="boundaryCreditQueryTimeout" attachedToRef="receive_credit_query"
+                       name="征信查询超时">
+            <timerEventDefinition>
+                <timeDuration>PT30S</timeDuration>
+            </timerEventDefinition>
+            <outgoing>Flow_credit_query_timeout_to_gateway</outgoing>
+        </boundaryEvent>
+
+        <sequenceFlow id="Flow_to_parallel_join_credit"
+                      sourceRef="receive_credit_query" targetRef="parallel_join_gateway"/>
+
+        <exclusiveGateway id="credit_query_timeout_gateway" name="征信超时处理">
+            <incoming>Flow_credit_query_timeout_to_gateway</incoming>
+            <outgoing>Flow_credit_query_timeout_retry</outgoing>
+            <outgoing>Flow_credit_query_timeout_manual</outgoing>
+        </exclusiveGateway>
+
+        <sequenceFlow id="Flow_credit_query_timeout_to_gateway"
+                      sourceRef="boundaryCreditQueryTimeout" targetRef="credit_query_timeout_gateway"/>
+
+        <serviceTask id="credit_query_timeout_handler_task" name="征信超时补偿"
+                     flowable:delegateExpression="${compensationDelegate}">
+            <incoming>Flow_credit_query_timeout_retry</incoming>
+            <outgoing>Flow_credit_query_timeout_handler_to_receive</outgoing>
+        </serviceTask>
+
+        <sequenceFlow id="Flow_credit_query_timeout_retry" name="补偿次数内"
+                      sourceRef="credit_query_timeout_gateway"
+                      targetRef="credit_query_timeout_handler_task">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${compensationCount == null || compensationCount < 3}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="Flow_credit_query_timeout_handler_to_receive"
+                      sourceRef="credit_query_timeout_handler_task"
+                      targetRef="receive_credit_query"/>
+
+        <serviceTask id="credit_query_manual_transfer_task" name="征信超时转人工"
+                     flowable:delegateExpression="${manualReviewDelegate}">
+            <incoming>Flow_credit_query_timeout_manual</incoming>
+            <outgoing>Flow_credit_query_manual_to_review</outgoing>
+        </serviceTask>
+
+        <sequenceFlow id="Flow_credit_query_timeout_manual" name="超限转人工"
+                      sourceRef="credit_query_timeout_gateway"
+                      targetRef="credit_query_manual_transfer_task">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${compensationCount != null && compensationCount >= 3}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="Flow_credit_query_manual_to_review"
+                      sourceRef="credit_query_manual_transfer_task"
+                      targetRef="manual_review_task"/>
 
         <serviceTask id="anti_fraud_task" name="反欺诈校验"
                      flowable:delegateExpression="${antiFraudDelegate}"
                      flowable:async="false">
             <incoming>Flow_to_anti_fraud</incoming>
-            <outgoing>Flow_to_parallel_join</outgoing>
+            <outgoing>Flow_to_parallel_join_anti</outgoing>
         </serviceTask>
 
         <sequenceFlow id="Flow_to_anti_fraud" sourceRef="parallel_fork_gateway" targetRef="anti_fraud_task"/>
 
         <parallelGateway id="parallel_join_gateway" name="并行汇聚">
-            <incoming>Flow_to_parallel_join</incoming>
-            <incoming>Flow_to_parallel_join</incoming>
+            <incoming>Flow_to_parallel_join_credit</incoming>
+            <incoming>Flow_to_parallel_join_anti</incoming>
             <outgoing>Flow_to_precheck_gateway</outgoing>
         </parallelGateway>
 
-        <sequenceFlow id="Flow_to_parallel_join" sourceRef="credit_query_task" targetRef="parallel_join_gateway"/>
-        <sequenceFlow id="Flow_to_parallel_join_2" sourceRef="anti_fraud_task" targetRef="parallel_join_gateway"/>
+        <sequenceFlow id="Flow_to_parallel_join_anti"
+                      sourceRef="anti_fraud_task" targetRef="parallel_join_gateway"/>
 
         <exclusiveGateway id="precheck_gateway" name="前置校验">
             <incoming>Flow_to_precheck_gateway</incoming>
             <outgoing>Flow_precheck_fraud_reject</outgoing>
             <outgoing>Flow_precheck_credit_reject</outgoing>
             <outgoing>Flow_to_scoring</outgoing>
+            <outgoing>Flow_precheck_need_manual</outgoing>
         </exclusiveGateway>
 
         <sequenceFlow id="Flow_to_precheck_gateway" sourceRef="parallel_join_gateway" targetRef="precheck_gateway"/>
@@ -63,49 +131,126 @@
         <sequenceFlow id="Flow_precheck_fraud_reject" name="欺诈拒绝"
                       sourceRef="precheck_gateway" targetRef="end_rejected">
             <conditionExpression xsi:type="tFormalExpression">
-                <![CDATA[${fraudResult == 2}]]>
+                <![CDATA[${fraudResult == 2 && needManualReview != true}]]>
             </conditionExpression>
         </sequenceFlow>
 
         <sequenceFlow id="Flow_precheck_credit_reject" name="征信不足拒绝"
                       sourceRef="precheck_gateway" targetRef="end_rejected">
             <conditionExpression xsi:type="tFormalExpression">
-                <![CDATA[${creditScore < 500}]]>
+                <![CDATA[${creditScore != null && creditScore < 500 && needManualReview != true}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="Flow_precheck_need_manual" name="需人工复核"
+                      sourceRef="precheck_gateway" targetRef="manual_review_task">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${needManualReview == true}]]>
             </conditionExpression>
         </sequenceFlow>
 
         <sequenceFlow id="Flow_to_scoring" name="继续审批"
                       sourceRef="precheck_gateway" targetRef="credit_scoring_task">
             <conditionExpression xsi:type="tFormalExpression">
-                <![CDATA[${fraudResult != 2 && creditScore >= 500}]]>
+                <![CDATA[${needManualReview != true && fraudResult != 2 && (creditScore == null || creditScore >= 500)}]]>
             </conditionExpression>
         </sequenceFlow>
 
-        <serviceTask id="credit_scoring_task" name="信用评分"
-                     flowable:delegateExpression="${creditScoringDelegate}">
+        <serviceTask id="credit_scoring_task" name="信用评分-发送MQ"
+                     flowable:delegateExpression="${creditScoringDelegate}"
+                     flowable:async="true">
             <incoming>Flow_to_scoring</incoming>
-            <outgoing>Flow_to_score_gateway</outgoing>
+            <outgoing>Flow_to_receive_scoring</outgoing>
         </serviceTask>
+
+        <receiveTask id="receive_scoring" name="信用评分-等待回调">
+            <incoming>Flow_to_receive_scoring</incoming>
+            <outgoing>Flow_to_score_gateway</outgoing>
+        </receiveTask>
+
+        <sequenceFlow id="Flow_to_receive_scoring"
+                      sourceRef="credit_scoring_task" targetRef="receive_scoring"/>
+
+        <boundaryEvent id="boundaryScoringTimeout" attachedToRef="receive_scoring"
+                       name="评分超时">
+            <timerEventDefinition>
+                <timeDuration>PT20S</timeDuration>
+            </timerEventDefinition>
+            <outgoing>Flow_scoring_timeout_to_gateway</outgoing>
+        </boundaryEvent>
+
+        <exclusiveGateway id="scoring_timeout_gateway" name="评分超时处理">
+            <incoming>Flow_scoring_timeout_to_gateway</incoming>
+            <outgoing>Flow_scoring_timeout_retry</outgoing>
+            <outgoing>Flow_scoring_timeout_manual</outgoing>
+        </exclusiveGateway>
+
+        <sequenceFlow id="Flow_scoring_timeout_to_gateway"
+                      sourceRef="boundaryScoringTimeout" targetRef="scoring_timeout_gateway"/>
+
+        <serviceTask id="scoring_timeout_handler_task" name="评分超时补偿"
+                     flowable:delegateExpression="${compensationDelegate}">
+            <incoming>Flow_scoring_timeout_retry</incoming>
+            <outgoing>Flow_scoring_timeout_handler_to_receive</outgoing>
+        </serviceTask>
+
+        <sequenceFlow id="Flow_scoring_timeout_retry" name="补偿次数内"
+                      sourceRef="scoring_timeout_gateway"
+                      targetRef="scoring_timeout_handler_task">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${scoringCompensationCount == null || scoringCompensationCount < 3}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="Flow_scoring_timeout_handler_to_receive"
+                      sourceRef="scoring_timeout_handler_task"
+                      targetRef="receive_scoring"/>
+
+        <serviceTask id="scoring_manual_transfer_task" name="评分超时转人工"
+                     flowable:delegateExpression="${manualReviewDelegate}">
+            <incoming>Flow_scoring_timeout_manual</incoming>
+            <outgoing>Flow_scoring_manual_to_review</outgoing>
+        </serviceTask>
+
+        <sequenceFlow id="Flow_scoring_timeout_manual" name="超限转人工"
+                      sourceRef="scoring_timeout_gateway"
+                      targetRef="scoring_manual_transfer_task">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${scoringCompensationCount != null && scoringCompensationCount >= 3}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="Flow_scoring_manual_to_review"
+                      sourceRef="scoring_manual_transfer_task"
+                      targetRef="manual_review_task"/>
 
         <exclusiveGateway id="score_gateway" name="评分结果判断">
             <incoming>Flow_to_score_gateway</incoming>
             <outgoing>Flow_score_reject</outgoing>
+            <outgoing>Flow_score_manual</outgoing>
             <outgoing>Flow_to_limit_calc</outgoing>
         </exclusiveGateway>
 
-        <sequenceFlow id="Flow_to_score_gateway" sourceRef="credit_scoring_task" targetRef="score_gateway"/>
+        <sequenceFlow id="Flow_to_score_gateway" sourceRef="receive_scoring" targetRef="score_gateway"/>
 
         <sequenceFlow id="Flow_score_reject" name="评分不足拒绝"
                       sourceRef="score_gateway" targetRef="end_rejected">
             <conditionExpression xsi:type="tFormalExpression">
-                <![CDATA[${creditScore < 600}]]>
+                <![CDATA[${creditScore != null && creditScore < 600 && needManualReview != true}]]>
+            </conditionExpression>
+        </sequenceFlow>
+
+        <sequenceFlow id="Flow_score_manual" name="需人工复核"
+                      sourceRef="score_gateway" targetRef="manual_review_task">
+            <conditionExpression xsi:type="tFormalExpression">
+                <![CDATA[${needManualReview == true}]]>
             </conditionExpression>
         </sequenceFlow>
 
         <sequenceFlow id="Flow_to_limit_calc" name="评分通过"
                       sourceRef="score_gateway" targetRef="limit_calc_task">
             <conditionExpression xsi:type="tFormalExpression">
-                <![CDATA[${creditScore >= 600}]]>
+                <![CDATA[${needManualReview != true && creditScore >= 600}]]>
             </conditionExpression>
         </sequenceFlow>
 

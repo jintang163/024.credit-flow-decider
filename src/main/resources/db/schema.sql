@@ -797,3 +797,68 @@ CREATE TABLE `sys_audit_log` (
     KEY `idx_success` (`success`),
     KEY `idx_operation_time` (`operation_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='审计日志表';
+
+-- =============================================
+-- 异步任务记录表 - 最终一致性保障核心表
+-- =============================================
+DROP TABLE IF EXISTS `async_task`;
+CREATE TABLE `async_task` (
+    `id`                      BIGINT          NOT NULL                COMMENT '主键ID(雪花)',
+    `task_id`                 VARCHAR(64)     NOT NULL                COMMENT '业务任务ID(UUID)',
+    `task_type`               VARCHAR(32)     NOT NULL                COMMENT '任务类型:CREDIT_QUERY-征信查询,CREDIT_SCORING-信用评分,ANTI_FRAUD-反欺诈,LIMIT_CALCULATION-额度计算',
+    `task_name`               VARCHAR(128)    DEFAULT NULL            COMMENT '任务名称(展示用)',
+    `process_instance_id`     VARCHAR(64)     DEFAULT NULL            COMMENT '流程实例ID',
+    `execution_id`            VARCHAR(64)     DEFAULT NULL            COMMENT '执行ID',
+    `application_id`          BIGINT          DEFAULT NULL            COMMENT '贷款申请ID',
+    `application_no`          VARCHAR(64)     DEFAULT NULL            COMMENT '申请编号',
+    `customer_id`             VARCHAR(64)     DEFAULT NULL            COMMENT '客户ID',
+    `status`                  TINYINT         NOT NULL DEFAULT 0      COMMENT '任务状态:0-PENDING待处理,1-PROCESSING处理中,2-SUCCESS成功,3-FAILED失败,4-TIMEOUT超时,5-MANUAL_REVIEW转人工,6-DEAD_LETTER死信,7-COMPENSATED已补偿,8-RETRYING重试中,9-CANCELLED已取消',
+    `signal_name`             VARCHAR(64)     DEFAULT NULL            COMMENT 'BPMN信号名',
+    `receive_task_id`         VARCHAR(64)     DEFAULT NULL            COMMENT 'BPMN接收任务ID',
+    `message_name`            VARCHAR(64)     DEFAULT NULL            COMMENT 'BPMN消息名',
+    `mq_topic`                VARCHAR(128)    DEFAULT NULL            COMMENT 'MQ主题',
+    `mq_tag`                  VARCHAR(64)     DEFAULT NULL            COMMENT 'MQ标签',
+    `mq_msg_id`               VARCHAR(128)    DEFAULT NULL            COMMENT 'RocketMQ消息ID',
+    `mq_key`                  VARCHAR(128)    DEFAULT NULL            COMMENT 'MQ业务Key',
+    `retry_count`             INT             NOT NULL DEFAULT 0      COMMENT '已重试次数(MQ重投+本地重试总和)',
+    `max_retry`               INT             NOT NULL DEFAULT 3      COMMENT '最大重试次数',
+    `timeout_ms`              BIGINT          NOT NULL DEFAULT 30000  COMMENT '超时时间(毫秒)',
+    `submit_time`             DATETIME        NOT NULL                COMMENT '任务提交时间',
+    `expire_time`             DATETIME        NOT NULL                COMMENT '任务过期时间',
+    `start_time`              DATETIME        DEFAULT NULL            COMMENT '开始处理时间',
+    `end_time`                DATETIME        DEFAULT NULL            COMMENT '处理结束时间',
+    `cost_ms`                 BIGINT          DEFAULT NULL            COMMENT '实际耗时(毫秒)',
+    `callback_status`         VARCHAR(32)     DEFAULT NULL            COMMENT '回调状态:PENDING-待回调,TRIGGERED-已触发,COMPLETED-已完成,SKIPPED-跳过,FAILED-失败',
+    `callback_time`           DATETIME        DEFAULT NULL            COMMENT '回调时间',
+    `compensation_count`      INT             NOT NULL DEFAULT 0      COMMENT '补偿次数(定时扫描或边界定时器)',
+    `last_compensation_time`  DATETIME        DEFAULT NULL            COMMENT '最后补偿时间',
+    `last_error`              VARCHAR(1024)   DEFAULT NULL            COMMENT '最后一次错误信息',
+    `error_stack`             TEXT            DEFAULT NULL            COMMENT '错误堆栈',
+    `request_body`            MEDIUMTEXT      DEFAULT NULL            COMMENT '请求消息体(原始MQ消息JSON)',
+    `response_body`           MEDIUMTEXT      DEFAULT NULL            COMMENT '响应消息体(返回结果快照)',
+    `result_snapshot`         MEDIUMTEXT      DEFAULT NULL            COMMENT '结果快照(JSON,用于重现)',
+    `remark`                  VARCHAR(512)    DEFAULT NULL            COMMENT '备注',
+    `created_time`            DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_time`            DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted`                 TINYINT         NOT NULL DEFAULT 0      COMMENT '删除标记:0-未删除,1-已删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_task_id` (`task_id`),
+    KEY `idx_process_instance` (`process_instance_id`),
+    KEY `idx_application_id` (`application_id`),
+    KEY `idx_application_no` (`application_no`),
+    KEY `idx_customer_id` (`customer_id`),
+    KEY `idx_status_task_type` (`status`, `task_type`),
+    KEY `idx_expire_time_status` (`expire_time`, `status`),
+    KEY `idx_mq_msg_id` (`mq_msg_id`),
+    KEY `idx_created_time` (`created_time`),
+    KEY `idx_updated_time` (`updated_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='异步任务记录表 - 最终一致性保障核心表';
+
+-- =============================================
+-- 异步任务索引说明:
+--   1. uk_task_id 唯一索引:保证taskId全局唯一
+--   2. idx_expire_time_status:CompensationScheduler扫描超时使用
+--   3. idx_status_task_type:统计各状态任务数使用
+--   4. idx_process_instance/idx_application_id:从业务侧反向追踪
+-- =============================================
+

@@ -87,15 +87,6 @@ credit:
     default-process-key: credit_approval_process
     auto-deploy: true
     check-before-deploy: true
-  credit:
-    mock-enabled: true
-    api-url: http://mock-credit-server/api/query
-    timeout: 5000
-    mock:
-      default-score: 680
-      min-score: 450
-      max-score: 850
-      delay-ms: 500
   integration:
     timeout-ms: 5000
     mock-enabled: true
@@ -109,6 +100,14 @@ credit:
       sliding-window-size: 10
     async:
       callback-timeout-ms: 10000
+    mock:
+      default-score: 680
+      min-score: 450
+      max-score: 850
+      delay-ms: 500
+      mock-enabled: true
+      api-url: http://mock-credit-server/api/query
+      timeout: 5000
     pboc:
       api-url: http://localhost:8081
       api-key: pboc-secret-key-2024
@@ -181,6 +180,29 @@ credit:
     min-term: 3
     max-term: 360
     max-dti: 0.75
+  async:
+    enabled: true
+    credit-query:
+      enabled: true
+      timeout-ms: 30000
+      max-retry: 3
+      retry-backoff-ms: 5000
+      receive-task-id: receive_credit_query
+      signal-name: signalCreditQueryDone
+    scoring:
+      enabled: true
+      timeout-ms: 20000
+      max-retry: 3
+      retry-backoff-ms: 5000
+      receive-task-id: receive_scoring
+      signal-name: signalScoringDone
+    compensation:
+      enabled: true
+      scan-cron: "0 */1 * * * ?"
+      scan-batch-size: 50
+      max-compensation-count: 3
+      timeout-to-manual-ms: 300000
+      transfer-to-manual: true
 
 rocketmq:
   name-server: localhost:9876
@@ -190,10 +212,25 @@ rocketmq:
     retry-times-when-send-failed: 2
   consumer:
     group: credit-consumer-group
+    batch-max-size: 1
+    consume-thread-min: 4
+    consume-thread-max: 8
   topic:
     credit-callback: credit-async-callback
+    credit-query-async: credit-async-query
+    scoring-async: credit-async-scoring
+    dead-letter: credit-dead-letter
+    compensation: credit-compensation
   tag:
     credit-callback: credit
+    credit-query-async: query
+    scoring-async: scoring
+    dead-letter: dead
+    compensation: compensation
+  consumerGroup:
+    credit-query-async: credit-query-async-consumer-group
+    scoring-async: credit-scoring-async-consumer-group
+    dead-letter: credit-dead-letter-consumer-group
 
 management:
   endpoints:
